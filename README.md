@@ -1,2 +1,2 @@
 # Zoomz
-Scrollign replaced with zooming
+Scrolling replaced with zooming
