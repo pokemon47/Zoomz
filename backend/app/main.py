@@ -24,7 +24,7 @@ from sqlalchemy import delete, select, text
 
 from . import account, auth, discover, files, live, spaces
 from .config import settings
-from .db import Base, SessionLocal, engine
+from .db import SessionLocal, engine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("zoomz")
@@ -163,11 +163,19 @@ app.mount("/api/assets", StaticFiles(directory=STATIC_DIR), name="assets")
 @app.on_event("startup")
 def startup() -> None:
     if settings.database_url.startswith("sqlite"):
-        # Local development and tests: create tables directly. Production runs `alembic upgrade head`.
-        from . import models  # noqa: F401 - registers tables
-
-        Base.metadata.create_all(engine)
+        # Local development and tests run the same migrations production runs (the container
+        # does `alembic upgrade head` before starting), so schemas never drift apart.
+        migrate()
     threading.Thread(target=_housekeeping, daemon=True, name="housekeeping").start()
+
+
+def migrate() -> None:
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config(str(APP_DIR.parent / "alembic.ini"))
+    cfg.set_main_option("script_location", str(APP_DIR.parent / "alembic"))
+    command.upgrade(cfg, "head")
 
 
 def _housekeeping() -> None:

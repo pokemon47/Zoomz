@@ -357,11 +357,10 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  border-radius: inherit;
   pointer-events: none;
   background-color: color-mix(in srgb, var(--floor-c) calc(var(--face-alpha, 1) * 100%), transparent);
   /* dot radius scales with the pitch so the inner floor matches the floor you land on */
-  background-image: radial-gradient(var(--canvas-dot) calc(var(--dot) * 0.067), transparent calc(var(--dot) * 0.075));
+  background-image: radial-gradient(color-mix(in srgb, var(--canvas-dot) calc(var(--dot-o, 1) * 100%), transparent) calc(var(--dot) * 0.067), transparent calc(var(--dot) * 0.075));
   background-size: var(--dot) var(--dot);
 }
 .zb-inner-head {
@@ -445,6 +444,8 @@
 .zb-scenery { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .zb-scene-layer { position: absolute; transform-origin: 50% 50%; pointer-events: none; }
 .zb-scene-svg { display: block; width: 100%; height: 100%; overflow: visible; }
+/* scenery layers are screen-sized; their viewBox does the moving */
+.zb-scene-full { left: 0; top: 0; width: 100%; height: 100%; display: block; }
 /* the floor of whichever board you're standing in (frosted when there's scenery) */
 .zb-floor {
   position: absolute;
@@ -514,6 +515,8 @@
 
 /* the board you're standing in, at screen size (no giant scaled card) */
 .zb-room { border-radius: 0; z-index: 0; }
+/* the studio floor: opaque; its dots fade out when they get too dense (--dot-o) */
+.zb-ground { background-color: var(--floor-c); }
 
 /* ---------- movable chrome panels ---------- */
 .zb-panel-float { position: absolute; z-index: 20; display: flex; align-items: center; gap: 6px; }
@@ -581,9 +584,11 @@
   position: absolute; z-index: 47000; padding: 12px; border-radius: var(--radius-lg); display: flex; flex-direction: column; gap: 8px;
   background: var(--lemon); color: #17131f; box-shadow: 0 8px 0 0 var(--lemon-side), 0 24px 36px -12px rgba(255, 190, 70, 0.55);
 }
-.zb-editor-board { background: var(--surface); color: var(--ink); box-shadow: var(--zb-l2); }
+.zb-editor-surface { background: var(--surface); color: var(--ink); box-shadow: var(--zb-l2); }
+.zb-editor-heading { font: 800 16px/1.2 var(--zb-disp); }
+.zb-editor-field { display: flex; flex-direction: column; gap: 4px; font: 700 12px/1 var(--zb-sans); opacity: 0.85; }
+.zb-editor-surface input, .zb-editor-surface textarea { background: var(--surface-sunk); }
 .zb-editor input, .zb-editor textarea { font: 700 16px/22px var(--zb-sans); color: inherit; background: rgba(255, 255, 255, 0.55); border: 0; border-radius: 10px; padding: 8px 10px; resize: vertical; }
-.zb-editor-board input { font: 800 18px/24px var(--zb-disp); background: var(--surface-sunk); }
 .zb-editor textarea { font-weight: 400; font-size: 15px; }
 .zb-editor input:focus-visible, .zb-editor textarea:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 1px; }
 .zb-editor-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -757,3 +762,53 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
   .zb-board-title { max-width: 32vw; }
   .zb-swatch { width: 26px; height: 26px; }
 }
+
+/* ---------- right-click menu ---------- */
+.zb-ctx {
+  position: fixed; z-index: 80; min-width: 230px; padding: 6px; border-radius: var(--radius-lg);
+  background: var(--surface); color: var(--ink); box-shadow: var(--zb-l2);
+  animation: zb-ctx-in 140ms var(--zb-spring) both; transform-origin: top left;
+}
+@keyframes zb-ctx-in { from { opacity: 0; transform: scale(0.96) translateY(-4px); } }
+.zb-ctx-title { padding: 8px 12px 6px; font: 800 13px/1.2 var(--zb-disp); color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.zb-ctx-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: 600 14px/1 var(--zb-sans); text-align: left; cursor: pointer; }
+.zb-ctx-item > span:not(.zb-ctx-icon) { flex: 1; }
+.zb-ctx-item svg, .zb-ctx-icon svg { width: 17px; height: 17px; }
+.zb-ctx-icon { display: inline-grid; }
+.zb-ctx-item kbd { font: 600 11px/1 var(--zb-mono); color: var(--ink-muted); }
+.zb-ctx-item:hover:not(:disabled), .zb-ctx-item:focus-visible, .zb-ctx-item[aria-expanded="true"] { background: var(--surface-sunk); outline: none; }
+.zb-ctx-item:disabled { opacity: 0.4; cursor: default; }
+.zb-ctx-item.is-danger { color: var(--danger); }
+.zb-ctx-chev { margin-left: auto; color: var(--ink-muted); }
+.zb-ctx-sep { height: 1px; margin: 4px 8px; background: var(--surface-side); }
+.zb-ctx-sub { position: relative; }
+.zb-ctx-submenu { position: absolute; left: calc(100% + 4px); top: -6px; min-width: 220px; }
+.zb-ctx-submenu.is-left { left: auto; right: calc(100% + 4px); transform-origin: top right; }
+
+/* ---------- lightbox: the card held up close ---------- */
+.zb-lightbox { position: fixed; inset: 0; z-index: 70; }
+.zb-lightbox-backdrop { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, rgba(23, 19, 31, 0.55), rgba(10, 8, 16, 0.78)); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.zb-lightbox-stage { position: absolute; inset: 0; pointer-events: none; }
+.zb-held {
+  position: absolute; pointer-events: auto; display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 22px; padding: 12px; background: var(--surface); color: var(--ink); will-change: transform;
+}
+.zb-held-media { position: relative; flex: 1 1 auto; min-height: 0; border-radius: 14px; overflow: hidden; background: var(--surface-sunk); display: grid; place-items: center; }
+.zb-held-media img, .zb-held-media video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.zb-held-media iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+.zb-held-icon { width: 30%; height: 30%; color: var(--ink-muted); }
+.zb-held-bar { height: 64px; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 6px 0; }
+.zb-held-text { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.zb-held-text strong { font: 800 18px/1.2 var(--zb-disp); letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zb-held-text span { font: 500 13px/1.3 var(--zb-sans); color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zb-held.zb-held-note { background: var(--lemon); color: #17131f; padding: 0; }
+.zb-held-notebody { position: relative; flex: 1; display: flex; flex-direction: column; gap: 14px; padding: 48px 40px 32px; overflow: auto; }
+.zb-held-notebody h2 { margin: 0; font: 800 30px/1.1 var(--zb-disp); letter-spacing: -0.01em; }
+.zb-held-notebody p { margin: 0; font: 400 19px/1.55 var(--zb-sans); white-space: pre-wrap; }
+.zb-held-notebody::before { content: ""; position: absolute; top: 6px; left: 50%; width: 120px; height: 30px; margin-left: -60px; transform: rotate(2deg); background: rgba(255, 255, 255, 0.55); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
+.zb-held-actions { position: absolute; top: 18px; right: 18px; display: flex; gap: 6px; }
+.zb-held-actions .zb-ibtn { background: var(--surface); box-shadow: var(--zb-l1); }
+
+.zb-inner-titles { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.zb-inner-caption { font: 500 11px/1.2 var(--zb-sans); color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zb-board.zb-far .zb-inner-titles { overflow: visible; }

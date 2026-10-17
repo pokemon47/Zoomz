@@ -19,6 +19,8 @@ export const SPACE = {
   focusSpan: 0.42,
   /** Board faces let this much scenery through (frosted acrylic); 1 = opaque. */
   faceAlpha: 0.84,
+  /** Frosted floors drawn when deep inside boards (0.16³ ≈ 0.4% shows through a fourth). */
+  maxFloorLayers: 3,
   /** Card face layout (local units): padding and title header above the content window. */
   facePad: 14,
   faceHeader: 44,
@@ -26,8 +28,8 @@ export const SPACE = {
   contentPad: 40,
   /** Off-screen margin before culling, px. */
   cullMargin: 160,
-  /** Root frame can zoom out to this fraction of its fit. */
-  minZoomOfFit: 0.35,
+  /** Root frame can zoom out to this fraction of its fit (far enough to see it as a speck). */
+  minZoomOfFit: 0.05,
   /** No frame zooms past this (into an image). Boards re-anchor long before. */
   maxLocalScale: 14,
   /** Screen padding when fitting a board. */

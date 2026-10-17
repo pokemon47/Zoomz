@@ -302,3 +302,19 @@ export function placeLayers(z: number, panX: number, panY: number, pointer: { x:
   }
   return out
 }
+
+/**
+ * The part of a layer that is on screen, as an SVG viewBox in layer units.
+ *
+ * A layer is laid out three periods wide (`layerW` px at scale 1), centred on the vanishing
+ * point (screen x = vp.w/2, y = horizonY), then shifted by (tx, ty) and scaled by `scale`
+ * about that point. So layer point (u, v) lands on screen at
+ *   X = vp.w/2 + tx + u·unit·scale,   Y = horizonY + ty + v·unit·scale,   unit = layerW / (3·period).
+ * Inverting that for the screen's corners gives the viewBox.
+ */
+export function layerViewBox(p: LayerPlacement, layerW: number, vp: { w: number; h: number }, horizonY: number): string {
+  const k = (layerW / (SCENERY.period * 3)) * p.scale // screen px per layer unit
+  const u0 = (0 - vp.w / 2 - p.tx) / k
+  const v0 = (0 - horizonY - p.ty) / k
+  return `${u0.toFixed(3)} ${v0.toFixed(3)} ${(vp.w / k).toFixed(3)} ${(vp.h / k).toFixed(3)}`
+}

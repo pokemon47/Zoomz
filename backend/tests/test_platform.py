@@ -376,3 +376,15 @@ def test_export_and_delete_account(make_client):
     assert c.get("/api/me").status_code == 401
     other = make_client("gone2@example.com")
     assert other.get(f"/api/spaces/{sid}/scene").status_code == 404
+
+
+def test_stacking_rank_round_trips(make_client):
+    c = make_client("layers@example.com")
+    sid = first_space(c)["id"]
+    root = scene(c, sid)["rootBoardId"]
+    nid = uid()
+    r = op(c, sid, {"type": "create", "node": {"id": nid, "type": "note", "parentId": root, "rank": 5, "content": {"title": "top"}}})
+    assert r.json()["changes"][0]["node"]["rank"] == 5
+    op(c, sid, {"type": "update", "id": nid, "patch": {"rank": -2.5}})
+    assert next(n for n in scene(c, sid)["nodes"] if n["id"] == nid)["rank"] == -2.5
+    assert op(c, sid, {"type": "update", "id": nid, "patch": {"rank": "high"}}).status_code == 400

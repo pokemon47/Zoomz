@@ -20,7 +20,7 @@ export type Op =
   | { type: "delete"; id: string }
   | { type: "batch"; ops: Op[] }
 
-export type Patch = Partial<Pick<SceneNode, "x" | "y" | "z" | "w" | "h" | "parentId">> & { content?: Record<string, unknown> }
+export type Patch = Partial<Pick<SceneNode, "x" | "y" | "z" | "w" | "h" | "parentId" | "rank">> & { content?: Record<string, unknown> }
 
 export type Peer = {
   connId: string
@@ -210,7 +210,7 @@ export class SceneStore {
         const n = this.space.node(op.id)
         if (!n) return { type: "batch", ops: [] }
         const back: Patch = {}
-        for (const k of ["x", "y", "z", "w", "h", "parentId"] as const) if (k in op.patch) (back as Record<string, unknown>)[k] = n[k]
+        for (const k of ["x", "y", "z", "w", "h", "parentId", "rank"] as const) if (k in op.patch) (back as Record<string, unknown>)[k] = n[k] ?? null
         if (op.patch.content) {
           const prev: Record<string, unknown> = {}
           const content = n.content as Record<string, unknown>
@@ -260,7 +260,7 @@ export class SceneStore {
    * Put files on a board. Each shows up at once with a local preview, uploads with progress,
    * then becomes a real item pointing at the stored file.
    */
-  async addFiles(files: File[], board: string, place: (i: number, file: File, ratio: number) => { x: number; y: number; w: number; h: number; z: number }) {
+  async addFiles(files: File[], board: string, place: (i: number, file: File, ratio: number) => { x: number; y: number; w: number; h: number; z: number; rank?: number }) {
     if (!this.canEdit(board)) {
       this.onError("You can only view this board.")
       return []

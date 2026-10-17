@@ -51,7 +51,10 @@ def node_out(n: Node, files: dict[str, StoredFile] | None = None) -> dict[str, A
     if fid:
         f = (files or {}).get(fid)
         content.update(file_urls(f) if f else {"status": "missing"})
-    return {"id": n.id, "type": n.type, "parentId": n.parent_id, "x": n.x, "y": n.y, "z": n.z, "w": n.w, "h": n.h, "content": content}
+    out = {"id": n.id, "type": n.type, "parentId": n.parent_id, "x": n.x, "y": n.y, "z": n.z, "w": n.w, "h": n.h, "content": content}
+    if n.rank is not None:
+        out["rank"] = n.rank
+    return out
 
 
 def file_urls(f: StoredFile) -> dict[str, Any]:
@@ -200,6 +203,7 @@ def _create(ctx: Ctx, data: Any) -> None:
         z=_num(data.get("z", 0), 0, 400, "z"),
         w=_num(data.get("w", 200), 20, 20000, "w"),
         h=_num(data.get("h", 200), 20, 20000, "h"),
+        rank=_num(data["rank"], -1e9, 1e9, "rank") if data.get("rank") is not None else None,
         content=content,
         search_text=search_text(type_, content),
         created_by=ctx.user.id if ctx.user else None,
@@ -228,6 +232,8 @@ def _update(ctx: Ctx, data: Any) -> None:
     for k, (lo, hi) in {"x": (-1e6, 1e6), "y": (-1e6, 1e6), "z": (0, 400), "w": (20, 20000), "h": (20, 20000)}.items():
         if k in patch:
             setattr(n, k, _num(patch[k], lo, hi, k))
+    if "rank" in patch:
+        n.rank = None if patch["rank"] is None else _num(patch["rank"], -1e9, 1e9, "rank")
     if "content" in patch:
         merged = {**(n.content or {}), **_clean_content(n.type, patch["content"], partial=True)}
         n.content = merged
