@@ -71,6 +71,13 @@ const easeOutBack = (t: number) => {
   const c = 1.4
   return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2)
 }
+const capture = (el: Element, id: number) => {
+  try {
+    el.setPointerCapture(id)
+  } catch {
+    /* the pointer already went away */
+  }
+}
 const isUrl = (s: string) => /^https?:\/\/\S+$/i.test(s)
 const isTyping = (t: EventTarget | null) => {
   const el = t as HTMLElement | null
@@ -562,7 +569,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
         cancelPress()
         const [a, b] = [...touches.current.values()]
         pinch.current = { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }
-        e.currentTarget.setPointerCapture(e.pointerId)
+        capture(e.currentTarget, e.pointerId)
         return
       }
     }
@@ -570,7 +577,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
     const target = e.target as HTMLElement
     if (target.closest("[data-no-drag]")) return
     onStopFollow?.()
-    e.currentTarget.setPointerCapture(e.pointerId)
+    capture(e.currentTarget, e.pointerId)
     engine.stop()
     const pt = local(e)
 
@@ -812,7 +819,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
   // ---------- keyboard ----------
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null
+      const t = e.target instanceof Element ? (e.target as HTMLElement) : null
       if (isTyping(t) || editing) return
       if (creating || e.defaultPrevented || t?.closest("[role=menu], [role=dialog]")) return
       const mod = e.metaKey || e.ctrlKey

@@ -470,7 +470,8 @@
 .zb-swatch:active { transform: translateY(2px); box-shadow: 0 1px 0 0 var(--surface-side); }
 .zb-swatch[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--surface), 0 0 0 6px var(--cobalt); }
 .zb-swatch:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 4px; }
-.zb-chrome-tr { position: absolute; top: var(--space-4); right: var(--space-4); z-index: 20; display: flex; gap: var(--space-3); align-items: center; }
+.zb-chrome-tr { position: absolute; top: var(--space-4); right: var(--space-4); z-index: 20; display: flex; gap: var(--space-3); align-items: center; pointer-events: none; }
+.zb-chrome-tr > * { pointer-events: auto; }
 
 /* ---------- menus & dialogs (shadcn, restyled: matte faces, lift shadows, no outlines) ---------- */
 .zb-menu { min-width: 220px; padding: 6px; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--zb-l2); border: 0; outline: none; }
@@ -508,7 +509,7 @@
 .zb-drop-pill { font: 700 14px/1 var(--zb-sans); padding: 12px 18px; border-radius: var(--radius-full); color: var(--on-cobalt); box-shadow: var(--zb-l2); }
 
 @media (max-width: 1000px) {
-  .zb-chrome-tr { top: auto; bottom: 84px; flex-direction: column-reverse; align-items: flex-end; }
+  .zb-chrome-tr, .zb-board-page .zb-chrome-tr { top: auto; bottom: 84px; flex-direction: column-reverse; align-items: flex-end; }
 }
 
 /* the board you're standing in, at screen size (no giant scaled card) */
@@ -750,4 +751,9 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
   .zb-minimap-panel { display: none; }
   .zb-home { padding: var(--space-4); }
   .zb-picker-label { display: none; }
+  .zb-topbar-mid { overflow: hidden; gap: 6px; }
+  .zb-hide-sm { display: none; }
+  .zb-topbar .zb-btn-sm { padding: 0 12px; }
+  .zb-board-title { max-width: 32vw; }
+  .zb-swatch { width: 26px; height: 26px; }
 }

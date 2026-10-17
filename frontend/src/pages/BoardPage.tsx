@@ -199,8 +199,8 @@ function LiveBoard({ store }: { store: SceneStore }) {
           </span>
         )}
         {!store.local && user && (
-          <button type="button" className="zb-btn zb-btn-cobalt zb-btn-sm" onClick={() => setSharing(true)}>
-            <Share2 size={14} strokeWidth={2.5} aria-hidden /> Share
+          <button type="button" className="zb-btn zb-btn-cobalt zb-btn-sm" onClick={() => setSharing(true)} aria-label="Share">
+            <Share2 size={14} strokeWidth={2.5} aria-hidden /> <span className="zb-hide-sm">Share</span>
           </button>
         )}
       </TopBar>
