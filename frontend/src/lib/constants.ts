@@ -1,35 +1,65 @@
-// Every tunable camera, zoom and motion value lives here.
-import type { LOD } from "./types"
+// Every tunable camera, depth, zoom and motion value lives here.
+import type { LOD, SceneNode } from "./types"
 
-export const ZOOM = {
-  min: 0.2,
-  max: 3,
-  /** Multiplier for the zoom-in / zoom-out buttons and +/- keys. */
-  step: 1.35,
-  /** Sensitivity of Ctrl/Cmd + wheel (and trackpad pinch). */
-  wheelSensitivity: 0.0075,
-  /** Screen padding around content when fitting a board, in px. */
-  fitPadding: { top: 96, right: 64, bottom: 104, left: 64 },
-  /** Fit never zooms in past this, so sparse boards don't blow up. */
-  fitMax: 1,
-  /** Arrow-key pan distance in screen px. */
-  keyPan: 120,
+export const SPACE = {
+  /** Camera "eye height" in screen px. Smaller = stronger depth and earlier fly-by. */
+  eye: 1500,
+  /** Pointer parallax: screen px of drift per screen px of height, at full pointer offset. */
+  pointerParallax: 0.12,
+  /** Things whose perspective boost passes this start fading; gone by passFadeEnd. */
+  passFadeStart: 2.0,
+  passFadeEnd: 3.2,
+  /** Below this perspective denominator a thing is behind the camera (skip). */
+  passDenom: 0.12,
+  /** A board starts drawing its contents on its face when it spans this fraction of the viewport… */
+  revealStart: 0.16,
+  /** …and its contents are fully in focus (cover gone) here. */
+  revealEnd: 0.42,
+  /** Card face layout (local units): padding and title header above the content window. */
+  facePad: 14,
+  faceHeader: 44,
+  /** Breathing room around a board's content when drawn on its face. */
+  contentPad: 40,
+  /** Off-screen margin before culling, px. */
+  cullMargin: 160,
+  /** Root frame can zoom out to this fraction of its fit. */
+  minZoomOfFit: 0.35,
+  /** No frame zooms past this (into an image). Boards re-anchor long before. */
+  maxLocalScale: 14,
+  /** Screen padding when fitting a board. */
+  fitPad: { top: 96, right: 72, bottom: 104, left: 72 },
 } as const
 
-/** Semantic zoom thresholds (design system: far < 0.45 ≤ medium ≤ 1.2 < close). */
-export const LOD_THRESHOLDS = { far: 0.45, close: 1.2 } as const
+export const ZOOM = {
+  /** Wheel/trackpad sensitivity: zoom factor = exp(-deltaY * this). */
+  wheel: 0.0022,
+  /** Pinch (ctrl + wheel) is finer-grained, so it gets more gain. */
+  pinch: 0.012,
+  /** Zoom buttons and +/- keys. */
+  step: 1.6,
+  /** Arrow-key pan distance in screen px. */
+  keyPan: 140,
+} as const
 
-export function lodForScale(scale: number): LOD {
-  if (scale < LOD_THRESHOLDS.far) return "far"
-  if (scale > LOD_THRESHOLDS.close) return "close"
-  return "medium"
+export const CAMERA = {
+  /** Exponential smoothing toward the target camera per 60fps frame (fluid wheel zoom). */
+  follow: 0.18,
+  /** Pointer parallax smoothing per frame. */
+  pointerFollow: 0.08,
+  /** Flights: base + per doubling of zoom, seconds. */
+  flightBase: 0.45,
+  flightPerOctave: 0.12,
+  flightMax: 1.6,
+} as const
+
+/** Level of detail from a card's on-screen width (px), not a global zoom. */
+export function lodFor(type: SceneNode["type"], screenW: number): LOD {
+  if (type === "image") return screenW < 90 ? "far" : screenW > 380 ? "close" : "medium"
+  if (type === "note") return screenW < 120 ? "far" : screenW > 200 ? "close" : "medium"
+  return screenW < 170 ? "far" : screenW > 520 ? "close" : "medium"
 }
 
 export const MOTION = {
-  /** Camera flight: stiffness 170 / damping 26 ≈ critically damped, ~600ms, no overshoot. */
-  camera: { type: "spring", stiffness: 170, damping: 26, mass: 1 },
-  /** Zoom buttons / fit: same spring so pointer anchoring stays exact. */
-  zoom: { type: "spring", stiffness: 170, damping: 26, mass: 1 },
   /** Hover tilt + press release: springy with ~8% overshoot. */
   tactile: { type: "spring", stiffness: 420, damping: 22, mass: 0.8 },
   /** Press down is quick: ~70ms. */
@@ -38,10 +68,6 @@ export const MOTION = {
   lift: { type: "spring", stiffness: 380, damping: 24 },
   /** Drop settle: one small bounce. */
   settle: { type: "spring", stiffness: 520, damping: 18 },
-  /** Child content rushing in after the dive. */
-  arrive: { type: "spring", stiffness: 170, damping: 26 },
-  /** Reduced-motion replacement for every flight. */
-  reducedFade: 0.12,
   /** Pointer travel (px) before a press becomes a drag. */
   dragThreshold: 4,
 } as const
@@ -66,3 +92,4 @@ export const STACK = {
 
 export const DEPTH_FLOOR = ["var(--depth-0)", "var(--depth-1)", "var(--depth-2)", "var(--depth-3)"]
 export const DEPTH_DOT = ["var(--surface-side)", "var(--tomato)", "var(--lilac)", "var(--mint)"]
+export const floorFor = (depth: number) => DEPTH_FLOOR[Math.min(depth, DEPTH_FLOOR.length - 1)]

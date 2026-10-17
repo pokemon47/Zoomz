@@ -17,7 +17,7 @@ DATA_FILE = ROOT / "data" / "demo-board.json"
 
 IMAGE_W, IMAGE_H = 200, 290
 NOTE_W, NOTE_H = 220, 190
-BOARD_W, BOARD_H = 280, 300
+BOARD_W, BOARD_H = 360, 330
 
 PALETTES = {
     "root": ["#FF8E72", "#FFD56E", "#6E8BFF", "#72D9A9", "#2B2340", "#FFF4E8"],
@@ -110,7 +110,7 @@ NOTES = {
 
 # Rough board-local layouts: board id -> list of slots (col, row) for children in order
 # boards first, then images, then notes. Columns are 320px apart, rows 360px apart.
-COL, ROW = 320, 360
+COL, ROW = 420, 440
 
 
 def child_boards(board_id: str) -> list[str]:
@@ -241,7 +241,10 @@ def build() -> dict:
             w, h = {"board": (BOARD_W, BOARD_H), "image": (IMAGE_W, IMAGE_H), "note": (NOTE_W, NOTE_H)}[kind]
             if kind == "note":
                 y += 40
-            node: dict = {"id": data["id"], "type": kind, "parentId": board_id, "x": x, "y": y, "w": w, "h": h}
+            # z: height above the board's floor, in the board's local units. Boards lie on the
+            # floor; prints are raised a little; notes float highest, so they rush past first.
+            z = {"board": 0, "image": rnd.randint(10, 46), "note": rnd.randint(70, 120)}[kind]
+            node: dict = {"id": data["id"], "type": kind, "parentId": board_id, "x": x, "y": y, "z": z, "w": w, "h": h}
             if kind == "board":
                 b = next(bb for bb in BOARDS if bb[0] == data["id"])
                 node["content"] = {"title": b[2], "description": b[3]}
@@ -255,7 +258,7 @@ def build() -> dict:
 
     root = BOARDS[0]
     nodes.insert(0, {
-        "id": "root", "type": "board", "parentId": None, "x": 0, "y": 0, "w": BOARD_W, "h": BOARD_H,
+        "id": "root", "type": "board", "parentId": None, "x": 0, "y": 0, "z": 0, "w": BOARD_W, "h": BOARD_H,
         "content": {"title": root[2], "description": root[3]},
     })
     return {"rootBoardId": "root", "nodes": nodes}

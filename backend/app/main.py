@@ -41,6 +41,7 @@ class BaseNode(BaseModel):
     parentId: Optional[str]
     x: float
     y: float
+    z: float = 0  # height above the parent board's floor, local units
     w: float
     h: float
 

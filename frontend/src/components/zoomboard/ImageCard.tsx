@@ -1,3 +1,4 @@
+import { memo } from "react"
 import type { LOD } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { TactileSlab, type Tactile } from "./TactileSlab"
@@ -13,7 +14,7 @@ export type ImageCardProps = {
 }
 
 /** The image as a mounted print on a neutral mat. Far: compact tile. Close: larger image + caption. */
-export function ImageCard({ title, alt, src, lod, selected, tactile, reduced }: ImageCardProps) {
+export const ImageCard = memo(function ImageCard({ title, alt, src, lod, selected, tactile, reduced }: ImageCardProps) {
   return (
     <TactileSlab
       tactile={tactile}
@@ -31,4 +32,4 @@ export function ImageCard({ title, alt, src, lod, selected, tactile, reduced }: 
       )}
     </TactileSlab>
   )
-}
+})

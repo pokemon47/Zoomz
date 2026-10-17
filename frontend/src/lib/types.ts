@@ -5,6 +5,8 @@ export type BaseNode = {
   parentId: string | null
   x: number
   y: number
+  /** Height above the parent board's floor, local units (drives depth parallax). */
+  z?: number
   w: number
   h: number
 }

@@ -1,3 +1,4 @@
+import { memo } from "react"
 import type { LOD } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { TactileSlab, type Tactile } from "./TactileSlab"
@@ -12,7 +13,7 @@ export type NoteCardProps = {
 }
 
 /** Lemon slab at −2° with masking tape. Title always; body only up close. */
-export function NoteCard({ title, body, lod, selected, tactile, reduced }: NoteCardProps) {
+export const NoteCard = memo(function NoteCard({ title, body, lod, selected, tactile, reduced }: NoteCardProps) {
   return (
     <TactileSlab
       tactile={tactile}
@@ -28,4 +29,4 @@ export function NoteCard({ title, body, lod, selected, tactile, reduced }: NoteC
       </div>
     </TactileSlab>
   )
-}
+})

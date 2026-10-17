@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { BoardCanvas } from "@/components/board/BoardCanvas"
+import { SpaceCanvas } from "@/components/space/SpaceCanvas"
 import { StatePanel } from "@/components/zoomboard/StatePanel"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { fetchScene } from "@/lib/api"
@@ -42,7 +42,7 @@ export default function App() {
       <main className="relative h-full w-full overflow-hidden bg-canvas">
         <h1 className="sr-only">Zoomable Board</h1>
         {load.status === "ready" ? (
-          <BoardCanvas scene={load.scene} onMoveNode={moveNode} />
+          <SpaceCanvas scene={load.scene} onMoveNode={moveNode} />
         ) : (
           <div className="zb-viewport grid place-items-center" style={{ backgroundSize: "24px 24px" }}>
             <div className="relative">

@@ -164,7 +164,7 @@
   }
 }
 .zb-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
-.zb-node { position: absolute; left: 0; top: 0; perspective: 900px; }
+.zb-node { position: absolute; left: 0; top: 0; perspective: 900px; transform-origin: 0 0; }
 .zb-node.is-dragging { z-index: 50; }
 
 /* ---------- cards: slabs ---------- */
@@ -306,3 +306,87 @@
 @media (max-width: 1000px) {
   .zb-chrome-bl { display: none; }
 }
+
+/* ---------- the space ---------- */
+.zb-space { background-image: none; }
+/* dot grid lives in its own layer so it can fade when it gets too dense */
+.zb-dots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(var(--canvas-dot) calc(var(--pitch, 24px) * 0.067), transparent calc(var(--pitch, 24px) * 0.075));
+}
+/* depth cue: edges of the room fall slightly into shadow */
+.zb-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40000;
+  background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 60%, rgba(120, 90, 60, 0.10));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not(.light):not([data-theme="light"]) .zb-vignette {
+    background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.35));
+  }
+}
+
+/* raised things cast a softer, further shadow the higher they float */
+.zb-hshadow {
+  position: absolute;
+  inset: 6%;
+  border-radius: var(--radius-md);
+  background: var(--cast);
+  transform: translate(calc(var(--zh) * 0.12px), calc(var(--zh) * 0.32px));
+  box-shadow: 0 0 calc(var(--zh) * 0.45px) calc(var(--zh) * 0.25px) var(--cast);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* board face: the closed cover fades out, the floor of the level inside fades in */
+.zb-board { overflow: hidden; }
+.zb-cover {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  opacity: calc(1 - var(--reveal, 0) * 3.2);
+}
+.zb-inner-floor {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: min(1, calc(var(--reveal, 0) * 3.2));
+  pointer-events: none;
+}
+.zb-inner-floor::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  /* dot radius scales with the pitch so the inner floor matches the floor you land on */
+  background-image: radial-gradient(var(--canvas-dot) calc(var(--dot) * 0.067), transparent calc(var(--dot) * 0.075));
+  background-size: var(--dot) var(--dot);
+}
+.zb-inner-head {
+  position: absolute;
+  left: var(--space-4);
+  right: var(--space-4);
+  top: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  opacity: min(1, calc(var(--reveal, 0) * 3.2));
+  pointer-events: none;
+}
+.zb-inner-title { font: 800 17px/1 var(--zb-disp); letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.is-open .zb-card { cursor: inherit; }
+.zb-zoomin {
+  font: 700 11px/1 var(--zb-sans);
+  padding: 6px 10px;
+  border-radius: var(--radius-full);
+  background: var(--surface-sunk);
+  color: var(--ink-muted);
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.07);
+}
+.zb-level { background: var(--surface); color: var(--ink); }
