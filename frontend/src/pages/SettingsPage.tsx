@@ -70,7 +70,7 @@ export function SettingsPage() {
 
         <section className="zb-panel zb-card-section">
           <h2>Your data</h2>
-          <p>Download everything we keep about you, plus the boards you own and their files, as a zip.</p>
+          <p>Download everything we keep about you, plus the canvases you own and their files, as a zip.</p>
           <a className="zb-btn zb-btn-sm" href="/api/me/export" download>
             Download my data
           </a>
@@ -78,7 +78,7 @@ export function SettingsPage() {
 
         <section className="zb-panel zb-card-section zb-danger">
           <h2>Delete account</h2>
-          <p>This deletes your account, every workspace you created, and all of their boards and files. Boards other people own stay theirs. This can't be undone.</p>
+          <p>This deletes your account, every workspace you created, and all of their canvases and files. Canvases other people own stay theirs. This can't be undone.</p>
           <form onSubmit={remove} className="zb-form">
             <label className="zb-field">
               <span>Type {user.email} to confirm</span>
@@ -111,13 +111,13 @@ export function LegalPage({ kind }: { kind: "terms" | "privacy" }) {
             <h2>Availability</h2>
             <p>We work to keep Zoomz running and your data safe, but the service is provided as is. Export your data any time from Settings.</p>
             <h2>Ending your account</h2>
-            <p>You can delete your account in Settings at any time; your workspaces, boards and files are deleted with it.</p>
+            <p>You can delete your account in Settings at any time; your workspaces, canvases and files are deleted with it.</p>
           </>
         ) : (
           <>
             <h1>Privacy</h1>
             <h2>What we keep</h2>
-            <p>Your email address, name and colour; the boards, notes and files you create; who you share them with; and short-lived session and sign-in records. If you sign in with Google we receive your name, email and profile picture.</p>
+            <p>Your email address, name and colour; the canvases, boards, notes and files you create; who you share them with; and short-lived session and sign-in records. If you sign in with Google we receive your name, email and profile picture.</p>
             <h2>What we don't do</h2>
             <p>We don't sell your data or use it for advertising. Link previews are fetched by our server; images in previews load from the linked site.</p>
             <h2>Cookies</h2>

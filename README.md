@@ -64,18 +64,19 @@ GitHub Actions runs SQLite tests, PostgreSQL migrations and tests, frontend chec
 | Fly to anything | Double-click it, or ⌘K search | Enter |
 | Go up a level | Breadcrumbs or Back | Escape |
 | Frame everything on the current board | **Fit board** | `0` |
-| Hide or show image and board captions | Captions button next to Fit board | `C` |
-| Jump somewhere on this board | Click or drag in the minimap | — |
+| Hide or show board labels / photo labels (each on its own) | The two label buttons next to Fit board | `⇧L` / `L` |
+| Jump somewhere on this board | Click or drag in the minimap (its eye button folds it away to a small tab at the side) | — |
 | Move the path bar, zoom controls or map | Drag their grip | Grip + arrow keys |
 
 **Editing.** Edits save instantly and appear for everyone on the board.
 
 | Action | How |
 | --- | --- |
-| Add images, videos, PDFs, any file | Drop them (or whole folders: each folder becomes a board, subfolders become boards inside it) on any board, paste with ⌘V, or **Add → Images & files…** (upload progress is shown on the card) |
+| Add images, videos, PDFs, any file | Drop them (or whole folders: each folder becomes a board, subfolders become boards inside it) on any board, paste with ⌘V, or the picture button on the side toolbar (upload progress is shown on the card) |
 | Add a link | Paste a URL. Links get a preview; YouTube, Vimeo and Figma play in place up close |
-| New note / board | **Add**, or `N` / `B`. Pasting plain text also makes a note. Notes have no length limit: the text sizes itself to fill the note (a few words are big, a long note is small) and stays readable in the lightbox |
-| Edit text | Double-click a note, or a board's title strip (Enter also edits a focused note) |
+| New note / board / arrow | Drag it from the side toolbar and drop it exactly where you want it (or click it, or press `N` / `B` / `A`, to put it in the middle). Notes and boards open for typing straight away, no naming dialog. Pasting plain text also makes a note. Notes have no length limit: the text sizes itself to fill the note (a few words are big, a long note is small) and stays readable in the lightbox |
+| Edit text | Click a note's text, or a board's title or description, and type right there (Esc or clicking away saves; dragging still just moves). Images, files and links: right-click → Edit |
+| Connect things | Drop an arrow on an item to start from it, then drag either end handle onto another item on the same board to attach it. Attached arrows follow their items around |
 | Move | Drag. Dropping onto another board moves the card *into* it, at that level's size |
 | Move a board | Drag its title strip (small boards: drag anywhere) |
 | Resize | Select one card and drag the blue corner grip (pictures always keep their true shape) |
@@ -95,9 +96,9 @@ GitHub Actions runs SQLite tests, PostgreSQL migrations and tests, frontend chec
 - **Per-board access:** give a member a different role inside one board and everything in it. For example, someone can edit the whole space but only view the "Final picks" board.
 - **Team workspaces:** members see every board in the workspace with their workspace role. A person's role is the higher of their workspace role and their board-space role.
 
-**Managing boards and workspaces.** Each board on the dashboard has a ⋯ menu: **Export as zip** and, for owners, **Delete** (asks first, then deletes permanently). The workspace ⋯ menu renames it or deletes it with everything in it (type its name to confirm). Your Personal workspace can be renamed but not deleted.
+**Canvases.** Each workspace holds canvases (shown on the dashboard); each canvas holds boards, notes, pictures and arrows. Start one with **New blank canvas**, or **Import canvas** to bring back an exported one. Each canvas has a ⋯ menu: **Duplicate canvas** (a full copy: every item where it was, its files, and its scenery), **Export canvas** and, for owners, **Delete** (asks first, then deletes permanently). The workspace ⋯ menu renames it or deletes it with everything in it (type its name to confirm). Your Personal workspace can be renamed but not deleted.
 
-**Exporting.** A board (from the dashboard, or right-click any board inside one) downloads as a zip: a folder per board, pictures and files under their own names, notes as Markdown, links in `links.md`, and `zoomz-manifest.json` with the exact layout (positions, sizes, stacking, nesting) for rebuilding it.
+**Exporting and importing.** A canvas (from the dashboard, or right-click any board inside one) downloads as a zip: a folder per board, pictures and files under their own names, notes as Markdown, links in `links.md`, and `zoomz-manifest.json` (format version 2) with everything needed to rebuild it exactly: every item's type, position, size, height, stacking, titles, captions, text, arrow ends and attachments, plus the canvas's scenery. **Import canvas** turns such a zip into a new canvas in the workspace, laid out exactly as it was; the files go through the normal upload checks.
 
 **Your account** (Settings): change your name and cursor colour, choose **Light**, **Dark** or **System** appearance (remembered per browser, applied before the page paints), download all your data as a zip, or delete your account along with everything in the workspaces you created.
 
@@ -227,7 +228,7 @@ Run the acceptance checks before switching traffic. Keep the original project in
 - **One continuous, infinitely nested space** (`frontend/src/lib/space.ts`). A board's contents are drawn on its card face, mapped into the board's stored content window (`content.frame`). The camera is always expressed in one board's own frame. When a child board covers the viewport, the camera re-anchors into it; when the current board stops covering the viewport, it re-anchors into the parent. Rendering is identical on both sides, so the transition is invisible and precision never runs out.
 - **The board you're standing in** is drawn as a screen-sized floor, not as a card scaled 50× or more. A huge scaled card overflows GPU texture limits and flickers.
 - **Walking, not scaling.** Things raised `z` above the floor get a perspective boost `g = 1 / (1 − z·s / eye)`, so notes rush toward you faster than prints. The pointer adds height-weighted parallax, and anything that reaches the eye fades as you pass it.
-- **Scenery** (`frontend/src/lib/scenery.ts`). Studio, Mountains, Clouds, Forest, Dunes and Cosmos: endless low-poly layers you move through as you zoom, with haze, pass-by fades and parallax. Board floors are frosted so the world shows through. Editors set a board's scenery for everyone; viewers can choose their own.
+- **Scenery** (`frontend/src/lib/scenery.ts`). Studio, Mountains, Clouds, Forest, Dunes and Cosmos, chosen from the small swatch next to search (hover it to see the others): endless low-poly layers you move through as you zoom, with haze, pass-by fades and parallax. Board floors are frosted so the world shows through. Editors set a board's scenery for everyone; viewers can choose their own.
 - **Camera** (`frontend/src/lib/cameraEngine.ts`). Wheel input glides in log-scale. Pans and pinches are direct. Flights for search, breadcrumbs, Fit and follow interpolate across levels in a common frame. The frame loop only runs while something moves.
 
 **Collaboration**

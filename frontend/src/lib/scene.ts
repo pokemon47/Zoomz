@@ -61,5 +61,8 @@ export function boundsOf(nodes: { x: number; y: number; w: number; h: number }[]
 /** Display title for any node (links may only have a URL). */
 export function titleOf(n: SceneNode): string {
   if (n.type === "link") return n.content.title || n.content.site || n.content.url
+  if (n.type === "arrow") return "Arrow"
+  if (n.type === "board") return n.content.title || "Untitled board"
+  if (n.type === "note") return n.content.title || n.content.body.split("\n")[0].slice(0, 60) || "Note"
   return n.content.title
 }

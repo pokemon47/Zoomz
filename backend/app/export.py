@@ -29,13 +29,17 @@ from .storage import path_for
 router = APIRouter(prefix="/api", tags=["export"])
 STATIC_DIR = (Path(__file__).parent / "static").resolve()
 
-MANIFEST_VERSION = 1
+MANIFEST_VERSION = 2
 COORDINATES = (
     "Each item's x, y, w and h are in its parent board's own units: the parent's content "
     "window is `frame` (x, y, w, h) on that board, and the board card shows that window scaled "
     "to fit inside it. z is the height above the board's floor; rank is the stacking order "
-    "among siblings (higher paints on top; null means the default order by type)."
+    "among siblings (higher paints on top; null means the default order by type). Arrows keep "
+    "their end points in content.x1/y1/x2/y2, relative to the arrow's own x and y; content.from "
+    "and content.to name the items an end is attached to."
 )
+#: Item types that are plain geometry, with nothing to put in the folders.
+SHAPES = {"arrow"}
 UNSAFE = re.compile(r'[\x00-\x1f/\\:*?"<>|]')
 ORDER = {"board": 0, "note": 1, "image": 2, "file": 3, "link": 4}
 
@@ -95,12 +99,18 @@ def export_board(space_id: str, board: Optional[str] = None, user: Optional[User
                 entry: dict[str, Any] = {
                     "id": n.id, "type": n.type, "parentId": n.parent_id, "title": title,
                     "x": n.x, "y": n.y, "z": n.z, "w": n.w, "h": n.h, "rank": n.rank,
+                    # Everything the item stores (title, captions, text, arrow ends…); uploaded
+                    # files are referenced by `path` inside the archive instead of an id.
+                    "content": {k: v for k, v in c.items() if k != "fileId"},
                 }
                 if n.type == "board":
                     path = f"{folder}/{names.take(safe_name(title, 'Board'))}"
                     entry |= {"path": path + "/", "frame": c.get("frame"), "description": c.get("description")}
                     manifest_nodes.append(entry)
                     walk(n, path)
+                    continue
+                if n.type in SHAPES:
+                    manifest_nodes.append(entry)
                     continue
                 if n.type == "note":
                     path = f"{folder}/{names.take(safe_name(title, 'Note') + '.md')}"
@@ -134,12 +144,16 @@ def export_board(space_id: str, board: Optional[str] = None, user: Optional[User
             if links:
                 z.writestr(f"{folder}/links.md", "# Links\n\n" + "\n".join(links) + "\n")
 
-        manifest_nodes.append({"id": root.id, "type": "board", "parentId": None, "title": root_title, "path": top + "/", "frame": (root.content or {}).get("frame")})
+        manifest_nodes.append({
+            "id": root.id, "type": "board", "parentId": None, "title": root_title, "path": top + "/",
+            "x": root.x, "y": root.y, "z": root.z, "w": root.w, "h": root.h, "rank": root.rank,
+            "frame": (root.content or {}).get("frame"), "content": dict(root.content or {}),
+        })
         walk(root, top)
         manifest = {
             "zoomzExport": MANIFEST_VERSION,
             "exportedAt": now().astimezone(timezone.utc).isoformat(),
-            "space": {"id": space.id, "title": space.title},
+            "space": {"id": space.id, "title": space.title, "scenery": space.scenery},
             "rootBoardId": root.id,
             "coordinates": COORDINATES,
             "nodes": manifest_nodes,

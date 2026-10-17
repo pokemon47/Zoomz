@@ -14,7 +14,7 @@ export function Avatar({ name, color, avatar, size = 32, ring }: { name: string;
 }
 
 /** The app's top bar (home, search, you). Board pages pass extra controls as children. */
-export function TopBar({ children, onSearch }: { children?: ReactNode; onSearch?(): void }) {
+export function TopBar({ children, onSearch, tools }: { children?: ReactNode; onSearch?(): void; tools?: ReactNode }) {
   const { user, signOut } = useSession()
   return (
     <header className="zb-topbar">
@@ -27,6 +27,7 @@ export function TopBar({ children, onSearch }: { children?: ReactNode; onSearch?
         <span className="zb-brand-name">Zoomz</span>
       </Link>
       <div className="zb-topbar-mid">{children}</div>
+      {tools}
       {onSearch && (
         <button type="button" className="zb-search-btn" onClick={onSearch} aria-label="Search (⌘K)">
           <Search size={16} strokeWidth={2.25} aria-hidden />

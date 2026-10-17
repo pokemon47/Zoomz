@@ -1,5 +1,7 @@
+import { Eye } from "lucide-react"
 import { useRef, useState, type PointerEvent } from "react"
 import { DEPTH_DOT, floorFor } from "@/lib/constants"
+import { arrowEnds } from "@/lib/arrows"
 import { fileKind } from "@/lib/files"
 import { titleOf } from "@/lib/scene"
 import type { Cam, Space, Viewport } from "@/lib/space"
@@ -13,6 +15,8 @@ type Props = {
   vp: Viewport
   /** Centre the camera on a point of the focus board (local units). */
   onCenter(x: number, y: number, glide: boolean): void
+  /** Fold the map away. */
+  onHide?(): void
 }
 
 const MAP_W = 232
@@ -23,7 +27,7 @@ const TONE: Record<string, string> = { "zb-tomato": "var(--tomato)", "zb-cobalt"
  * Where you are: the board you're standing in, everything on it, and a frame for what's
  * on screen. Step into another board and the map falls into it with you.
  */
-export function Minimap({ space, focus, cam, vp, onCenter }: Props) {
+export function Minimap({ space, focus, cam, vp, onCenter, onHide }: Props) {
   const board = space.node(focus)
   const depth = space.depthOf(focus)
   const kids = space.index.children.get(focus) ?? []
@@ -85,6 +89,11 @@ export function Minimap({ space, focus, cam, vp, onCenter }: Props) {
         </span>
         <span className="zb-minimap-title">{board ? titleOf(board) : ""}</span>
         <span className="zb-meta">L{depth + 1}</span>
+        {onHide && (
+          <button type="button" className="zb-minimap-hide" onClick={onHide} aria-label="Hide the map" title="Hide the map" data-no-drag>
+            <Eye size={14} strokeWidth={2.25} aria-hidden />
+          </button>
+        )}
       </div>
       <div className="zb-minimap-well" style={{ background: floorFor(depth) }}>
         <svg
@@ -122,6 +131,15 @@ export function Minimap({ space, focus, cam, vp, onCenter }: Props) {
               return <image key={n.id} href={n.content.src} x={p.x} y={p.y} width={n.w} height={n.h} preserveAspectRatio="xMidYMid slice" />
             if (n.type === "note") return <rect key={n.id} x={p.x} y={p.y} width={n.w} height={n.h} rx={r} fill="var(--lemon)" />
             if (n.type === "link") return <rect key={n.id} x={p.x} y={p.y} width={n.w} height={n.h} rx={r} fill="var(--cobalt)" />
+            if (n.type === "arrow") {
+              const [a, b] = arrowEnds(n, p, (id) => {
+                const t = space.node(id)
+                if (!t || t.parentId !== n.parentId) return null
+                const tp = space.at(t)
+                return { x: tp.x, y: tp.y, w: t.w, h: t.h }
+              })
+              return <line key={n.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="var(--ink)" strokeOpacity={0.55} strokeWidth={Math.max(bw, bh) * 0.006} strokeLinecap="round" />
+            }
             return <rect key={n.id} x={p.x} y={p.y} width={n.w} height={n.h} rx={r} fill={TONE[fileKind(n.content.mime ?? "", n.content.title).tone] ?? "var(--lemon)"} />
           })}
           <g clipPath={`url(#mm-${focus})`}>

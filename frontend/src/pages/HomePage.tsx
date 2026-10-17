@@ -1,5 +1,5 @@
-import { Download, MoreHorizontal, Pencil, Plus, Trash2, Users } from "lucide-react"
-import { useCallback, useEffect, useState, type FormEvent } from "react"
+import { Copy, Download, FileUp, MoreHorizontal, Pencil, Plus, Trash2, Users } from "lucide-react"
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, navigate } from "@/app/router"
 import { useToast } from "@/app/toasts"
 import { SearchDialog } from "@/components/app/SearchDialog"
@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/zoomboard/Button"
 import { StatePanel } from "@/components/zoomboard/StatePanel"
-import { api, apiUrl } from "@/lib/http"
+import { api, apiUrl, upload } from "@/lib/http"
 import type { Role } from "@/lib/types"
 
 type SpaceCard = { id: string; title: string; role: Role; workspaceId: string; updatedAt: string; thumbs: string[]; shared: boolean }
@@ -58,17 +58,44 @@ export function HomePage() {
     return () => window.removeEventListener("keydown", onKey)
   }, [])
 
-  const newBoard = async () => {
+  const newCanvas = async () => {
     try {
-      const s = await api<SpaceCard>("/api/spaces", { json: { title: "Untitled board", workspaceId: tab || undefined } })
+      const s = await api<SpaceCard>("/api/spaces", { json: { title: "Untitled canvas", workspaceId: tab || undefined } })
       navigate(`/b/${s.id}`)
     } catch (e) {
       toast((e as Error).message)
     }
   }
 
+  // Import an exported canvas (.zip) as a new canvas in this workspace, laid out exactly as it was.
+  const importInput = useRef<HTMLInputElement>(null)
+  const [importing, setImporting] = useState<number | null>(null)
+  const importCanvas = async (file: File) => {
+    setImporting(0)
+    try {
+      const s = await upload<SpaceCard>(`/api/spaces/import${tab ? `?workspaceId=${encodeURIComponent(tab)}` : ""}`, file, (f) => setImporting(f))
+      toast(`Imported “${s.title}”`)
+      navigate(`/b/${s.id}`)
+    } catch (e) {
+      toast((e as Error).message)
+    } finally {
+      setImporting(null)
+    }
+  }
+
+  const duplicate = async (s: SpaceCard) => {
+    try {
+      const copy = await api<SpaceCard>(`/api/spaces/${s.id}/duplicate`, { json: {} })
+      toast(`Duplicated “${s.title}”`)
+      await load()
+      setTab(copy.workspaceId)
+    } catch (e) {
+      toast((e as Error).message)
+    }
+  }
+
   if (error) return <Center><StatePanel kind="error" message={error} onRetry={load} /></Center>
-  if (!data) return <Center><StatePanel kind="loading" title="Loading your boards" /></Center>
+  if (!data) return <Center><StatePanel kind="loading" title="Loading your canvases" /></Center>
 
   const ws = data.workspaces.find((w) => w.id === tab) ?? data.workspaces[0]
   const boards = data.mine.filter((s) => s.workspaceId === ws?.id)
@@ -116,26 +143,42 @@ export function HomePage() {
               </Button>
             )}
             {canAdd && (
-              <Button variant="primary" size="sm" onClick={newBoard}>
-                <Plus size={14} strokeWidth={2.5} aria-hidden /> New board
-              </Button>
+              <>
+                <Button size="sm" onClick={() => importInput.current?.click()} disabled={importing !== null}>
+                  <FileUp size={14} strokeWidth={2.5} aria-hidden /> {importing !== null ? `Importing… ${Math.round(importing * 100)}%` : <>Import<span className="zb-hide-sm"> canvas</span></>}
+                </Button>
+                <Button variant="primary" size="sm" onClick={newCanvas}>
+                  <Plus size={14} strokeWidth={2.5} aria-hidden /> New<span className="zb-hide-sm"> blank</span> canvas
+                </Button>
+                <input
+                  ref={importInput}
+                  type="file"
+                  accept=".zip,application/zip"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    e.target.value = ""
+                    if (f) void importCanvas(f)
+                  }}
+                />
+              </>
             )}
           </div>
         </div>
 
         {boards.length ? (
-          <div className="zb-grid">{boards.map((s) => <BoardTile key={s.id} s={s} onDelete={() => setDeletingBoard(s)} />)}</div>
+          <div className="zb-grid">{boards.map((s) => <BoardTile key={s.id} s={s} onDelete={() => setDeletingBoard(s)} onDuplicate={canAdd ? () => void duplicate(s) : undefined} />)}</div>
         ) : (
           <div className="zb-empty">
-            <p>Nothing here yet — make a board and drop some inspiration in!</p>
-            {canAdd && <Button variant="primary" onClick={newBoard}>New board</Button>}
+            <p>Nothing here yet — start a canvas and drop some inspiration in!</p>
+            {canAdd && <Button variant="primary" onClick={newCanvas}>New blank canvas</Button>}
           </div>
         )}
 
         {data.shared.length > 0 && (
           <>
             <h2 className="zb-section">Shared with you</h2>
-            <div className="zb-grid">{data.shared.map((s) => <BoardTile key={s.id} s={s} onDelete={() => setDeletingBoard(s)} />)}</div>
+            <div className="zb-grid">{data.shared.map((s) => <BoardTile key={s.id} s={s} onDelete={() => setDeletingBoard(s)} onDuplicate={() => void duplicate(s)} />)}</div>
           </>
         )}
       </div>
@@ -163,7 +206,7 @@ export function HomePage() {
       {deletingWs && (
         <ConfirmDelete
           title={`Delete “${deletingWs.name}”?`}
-          message={`This permanently deletes the workspace, every board in it (${data.mine.filter((b) => b.workspaceId === deletingWs.id).length}) and all their pictures and files, for everyone. It can't be undone.`}
+          message={`This permanently deletes the workspace, every canvas in it (${data.mine.filter((b) => b.workspaceId === deletingWs.id).length}) and all their pictures and files, for everyone. It can't be undone.`}
           typeToConfirm={deletingWs.name}
           action="Delete workspace"
           onClose={() => setDeletingWs(null)}
@@ -179,8 +222,8 @@ export function HomePage() {
       {deletingBoard && (
         <ConfirmDelete
           title={`Delete “${deletingBoard.title}”?`}
-          message="This permanently deletes the board, every board inside it, and all its pictures, notes and files, for everyone. It can't be undone."
-          action="Delete board"
+          message="This permanently deletes the canvas, every board on it, and all its pictures, notes and files, for everyone. It can't be undone."
+          action="Delete canvas"
           onClose={() => setDeletingBoard(null)}
           onConfirm={async () => {
             await api(`/api/spaces/${deletingBoard.id}`, { method: "DELETE" })
@@ -198,7 +241,7 @@ function Center({ children }: { children: React.ReactNode }) {
   return <main className="zb-page zb-page-center">{children}</main>
 }
 
-function BoardTile({ s, onDelete }: { s: SpaceCard; onDelete(): void }) {
+function BoardTile({ s, onDelete, onDuplicate }: { s: SpaceCard; onDelete(): void; onDuplicate?(): void }) {
   const tiles = s.thumbs.slice(0, 4)
   return (
     <div className="zb-tile-wrap">
@@ -223,14 +266,19 @@ function BoardTile({ s, onDelete }: { s: SpaceCard; onDelete(): void }) {
           <MoreHorizontal size={16} strokeWidth={2.25} aria-hidden />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-auto min-w-48">
+          {onDuplicate && (
+            <DropdownMenuItem onClick={onDuplicate}>
+              <Copy aria-hidden /> Duplicate canvas
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem render={<a href={apiUrl(`/api/spaces/${s.id}/export`)} download />}>
-            <Download aria-hidden /> Export as zip
+            <Download aria-hidden /> Export canvas
           </DropdownMenuItem>
           {s.role === "owner" && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onClick={onDelete}>
-                <Trash2 aria-hidden /> Delete board…
+                <Trash2 aria-hidden /> Delete canvas…
               </DropdownMenuItem>
             </>
           )}
@@ -342,7 +390,7 @@ function NewTeamDialog({ open, onClose, onCreated }: { open: boolean; onClose():
         <form onSubmit={submit} className="flex flex-col gap-5">
           <DialogHeader>
             <DialogTitle className="zb-dialog-title">New team workspace</DialogTitle>
-            <DialogDescription>Everyone you add can see the boards in it.</DialogDescription>
+            <DialogDescription>Everyone you add can see the canvases in it.</DialogDescription>
           </DialogHeader>
           <label className="zb-field">
             <span>Name</span>
@@ -385,7 +433,7 @@ function MembersDialog({ ws, onClose }: { ws: Workspace; onClose(): void }) {
       <DialogContent className="zb-dialog zb-dialog-wide" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="zb-dialog-title">{ws.name} members</DialogTitle>
-          <DialogDescription>Members see every board in this workspace with their role.</DialogDescription>
+          <DialogDescription>Members see every canvas in this workspace with their role.</DialogDescription>
         </DialogHeader>
         {ws.role === "owner" && (
           <form onSubmit={add} className="zb-invite-row">

@@ -21,7 +21,7 @@ from .permissions import can_edit, role_at
 from .storage import file_url
 
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
-TYPES = {"board", "image", "note", "file", "link"}
+TYPES = {"board", "image", "note", "file", "link", "arrow"}
 MAX_CHILDREN = 5000
 MAX_BATCH = 500
 
@@ -34,7 +34,12 @@ CONTENT_FIELDS: dict[str, dict[str, int]] = {
     "note": {"title": 120, "body": 100_000},
     "file": {"title": 255, "fileId": 32},
     "link": {"url": 2000, "title": 300, "description": 600, "image": 2000, "site": 120, "embed": 2000},
+    # An arrow between two points of its board; either end may be attached to another item
+    # on the same board (`from` / `to` are that item's id).
+    "arrow": {"from": 64, "to": 64},
 }
+#: Numeric content fields: arrow end points, relative to the arrow's own x/y, in board units.
+NUM_FIELDS: dict[str, tuple[str, ...]] = {"arrow": ("x1", "y1", "x2", "y2")}
 DEFAULT_FRAME = {"x": 0, "y": 0, "w": 1300, "h": 1100}
 
 
@@ -113,6 +118,9 @@ def _clean_content(type_: str, content: Any, partial: bool) -> dict[str, Any]:
                 "h": _num(v.get("h", 1100), 200, 1e6, "frame.h"),
             }
             continue
+        if k in NUM_FIELDS.get(type_, ()):
+            out[k] = _num(v, -1e7, 1e7, k)
+            continue
         if k not in allowed:
             continue  # ignore derived fields clients echo back (src, thumbs, status…)
         if v is None:
@@ -124,6 +132,13 @@ def _clean_content(type_: str, content: Any, partial: bool) -> dict[str, Any]:
     if not partial and type_ == "board":
         out.setdefault("title", "Untitled board")
         out.setdefault("frame", dict(DEFAULT_FRAME))
+    if type_ == "arrow":
+        for k in ("from", "to"):
+            if out.get(k) and not ID_RE.match(out[k]):
+                raise OpError("arrow ends must point at an item id")
+        if not partial:
+            for k, d in (("x1", 0.0), ("y1", 0.0), ("x2", 160.0), ("y2", 0.0)):
+                out.setdefault(k, d)
     if not partial and type_ == "note":
         out.setdefault("title", "Note")
         out.setdefault("body", "")

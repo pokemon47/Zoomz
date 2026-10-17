@@ -15,32 +15,33 @@ import {
   type MutableRefObject,
   type PointerEvent as ReactPointerEvent,
 } from "react"
-import { AddMenu } from "@/components/zoomboard/AddMenu"
-import { BoardCard } from "@/components/zoomboard/BoardCard"
+import { Eye, EyeOff } from "lucide-react"
+import { BoardCard, type BoardField } from "@/components/zoomboard/BoardCard"
 import { Breadcrumbs } from "@/components/zoomboard/Breadcrumbs"
-import { CreateDialog, type CreateKind } from "@/components/zoomboard/CreateDialog"
 import { DraggablePanel } from "@/components/zoomboard/DraggablePanel"
 import { FileCard } from "@/components/zoomboard/FileCard"
 import { ImageCard } from "@/components/zoomboard/ImageCard"
 import { LevelBadge } from "@/components/zoomboard/LevelBadge"
 import { LinkCard } from "@/components/zoomboard/LinkCard"
 import { Minimap } from "@/components/zoomboard/Minimap"
-import { NoteCard } from "@/components/zoomboard/NoteCard"
-import { SceneryPicker } from "@/components/zoomboard/SceneryPicker"
+import { NoteCard, type NoteField } from "@/components/zoomboard/NoteCard"
 import type { Tactile } from "@/components/zoomboard/TactileSlab"
+import { Toolbar, type ToolKind } from "@/components/zoomboard/Toolbar"
 import { ZoomControls } from "@/components/zoomboard/ZoomControls"
 import { CameraEngine } from "@/lib/cameraEngine"
 import { copyNodes, lastClip, parseClip, pasteOps } from "@/lib/clipboard"
 import { MOTION, SPACE, ZOOM, cardBoxFactor, floorFor, perspectiveFor } from "@/lib/constants"
 import { IMPORT_GRID, IMPORT_LIMITS, countFiles, fileCard, planFolder, readDrop, type BoardPlan, type FolderTree } from "@/lib/folderImport"
 import { api, apiUrl } from "@/lib/http"
-import { getCaptions, saveCaptions } from "@/lib/captions"
+import { arrowEnds, arrowPatch, attachable, distToSegment, isArrow, type Box, type Pt } from "@/lib/arrows"
+import { getLabels, saveLabels, type Labels } from "@/lib/labels"
 import { pathTo, titleOf } from "@/lib/scene"
 import { SCENERY, themeById, type SceneryId } from "@/lib/scenery"
 import { layout, lift, localFromScreen, sortByLayer, type Cam, type Layout, type Placed, type Space, type Viewport } from "@/lib/space"
 import { layerOps, topRank, type LayerMove } from "@/lib/layers"
 import { IMAGE_MAT, imageCard, imageCardHeight, newId, type Op, type SceneStore } from "@/lib/store"
-import type { SceneNode } from "@/lib/types"
+import type { ArrowNode, SceneNode } from "@/lib/types"
+import { ArrowItem } from "./ArrowItem"
 import { ContextMenu, type ContextAction } from "./ContextMenu"
 import { Lightbox } from "./Lightbox"
 import { EditOverlay, Marquee, RemoteCursors, editFields, type EditTarget } from "./Overlays"
@@ -56,7 +57,6 @@ export type CanvasController = {
 type Props = {
   store: SceneStore
   scenery: SceneryId
-  onScenery(id: SceneryId): void
   /** connId of the person whose view you're following, if any. */
   follow?: string | null
   onStopFollow?(): void
@@ -68,8 +68,12 @@ type Grab = { id: string; parent: string; x: number; y: number; sx: number; sy: 
 type Press =
   | { kind: "pan"; pointer: number; lx: number; ly: number; moved: boolean }
   | { kind: "marquee"; pointer: number; sx: number; sy: number; x: number; y: number }
-  | { kind: "items"; pointer: number; sx: number; sy: number; primary: string; fx: number; fy: number; grabs: Grab[]; moved: boolean; additive: boolean }
+  | { kind: "items"; pointer: number; sx: number; sy: number; primary: string; fx: number; fy: number; grabs: Grab[]; moved: boolean; additive: boolean; edit: string | null }
+  | { kind: "arrowEnd"; pointer: number; id: string; end: 1 | 2; at: Pt; snap: string | null; moved: boolean }
   | { kind: "resize"; pointer: number; sx: number; sy: number; id: string; w: number; h: number; scale: number; keepAspect: boolean; orig: SceneNode }
+
+/** Text being edited in place on a card. */
+type Inline = { id: string; field: NoteField | BoardField }
 
 /** A short scale/fade animation on one item: re-parenting (adopt the new level's size) or spawning. */
 type Morph = { from: number; start: number; dur: number; fx: number; fy: number; spawn: boolean }
@@ -91,16 +95,35 @@ const isTyping = (t: EventTarget | null) => {
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)
 }
 
-export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFollow, onToast, controller }: Props) {
+export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToast, controller }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const reduced = useReducedMotion() ?? false
   const space = store.space
   const toast = useCallback((m: string) => onToast?.(m), [onToast])
-  const [captions, setCaptions] = useState(getCaptions)
-  const toggleCaptions = useCallback(() => {
-    setCaptions((on) => {
-      saveCaptions(!on)
-      return !on
+  const [labels, setLabels] = useState<Labels>(getLabels)
+  const toggleLabels = useCallback((which: keyof Labels) => {
+    setLabels((l) => {
+      const next = { ...l, [which]: !l[which] }
+      saveLabels(next)
+      return next
+    })
+  }, [])
+  const [mapHidden, setMapHidden] = useState(() => {
+    try {
+      return localStorage.getItem("zoomz.minimap") === "hidden"
+    } catch {
+      return false
+    }
+  })
+  const toggleMap = useCallback(() => {
+    setMapHidden((h) => {
+      try {
+        if (h) localStorage.removeItem("zoomz.minimap")
+        else localStorage.setItem("zoomz.minimap", "hidden")
+      } catch {
+        /* private mode */
+      }
+      return !h
     })
   }, [])
 
@@ -125,8 +148,10 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
   const pressRef = useRef<Press | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const [fileDrag, setFileDrag] = useState<string | null>(null)
-  const [creating, setCreating] = useState<CreateKind | null>(null)
+  /** Image, file and link titles: edited in a small panel over the card. */
   const [editing, setEditing] = useState<string | null>(null)
+  /** Notes and board labels: edited right on the card. */
+  const [inline, setInline] = useState<Inline | null>(null)
   /** Right-click menu: where, and for which card. */
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null)
   /** The card held up close in the lightbox (hidden on the board meanwhile). */
@@ -266,15 +291,38 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
   )
 
   /** Topmost visible card under a screen point, by paint order (independent of pointer capture). */
-  const itemAt = useCallback((px: number, py: number): Placed | undefined => {
+  const itemAt = useCallback((px: number, py: number, exclude?: string): Placed | undefined => {
     let best: Placed | undefined
     for (const p of layRef.current.items) {
-      if (p.opacity < 0.2) continue
-      if (px < p.x || py < p.y || px > p.x + p.node.w * p.scale || py > p.y + p.node.h * p.scale) continue
+      if (p.opacity < 0.2 || p.node.id === exclude) continue
+      if (isArrow(p.node)) {
+        const [a, b] = arrowScreenEnds(p)
+        if (distToSegment({ x: px, y: py }, a, b) > 8) continue
+      } else if (px < p.x || py < p.y || px > p.x + p.node.w * p.scale || py > p.y + p.node.h * p.scale) continue
       if (!best || p.order > best.order) best = p
     }
     return best
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  /** Where an arrow's ends are on screen right now: attached ends follow their items, wherever
+   *  those are drawn (raised cards included); `override` is an end being dragged. */
+  function arrowScreenEnds(p: Placed, override?: { end: 1 | 2; at: Pt; snap: string | null }): [Pt, Pt] {
+    const n = p.node as ArrowNode
+    const s = p.scale
+    const at = space.at(n)
+    const c = n.content
+    const scaled = { ...n, content: { ...c, x1: c.x1 * s, y1: c.y1 * s, x2: c.x2 * s, y2: c.y2 * s } }
+    const boxOf = (id: string): Box | null => {
+      const t = space.node(id)
+      if (!attachable(n, t)) return null
+      const tp = layRef.current.items.find((it) => it.node.id === id)
+      if (tp) return { x: tp.x, y: tp.y, w: t!.w * tp.scale, h: t!.h * tp.scale }
+      const ta = space.at(t!)
+      return { x: p.x + (ta.x - at.x) * s, y: p.y + (ta.y - at.y) * s, w: t!.w * s, h: t!.h * s }
+    }
+    return arrowEnds(scaled, { x: p.x, y: p.y }, boxOf, override)
+  }
 
   const localAt = useCallback(
     (board: string, sx: number, sy: number) => {
@@ -510,18 +558,57 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
     [clampInto, engine, localAt],
   )
 
-  const createNode = useCallback(
-    (kind: CreateKind, title: string, body: string) => {
-      setCreating(null)
+  /** A pasted bit of text becomes a note in the middle of the view. */
+  const createNote = useCallback(
+    (title: string, body: string) => {
       const board = lay.focus
       if (!store.canEdit(board)) return toast("You can only view this board.")
-      const node: SceneNode =
-        kind === "note"
-          ? { id: newId("note"), type: "note", parentId: board, ...nearCentre(board, 220, 190), z: 80 + Math.round(Math.random() * 30), w: 220, h: 190, rank: topRank(space, board), content: { title, body } }
-          : { id: newId("board"), type: "board", parentId: board, ...nearCentre(board, 360, 330), z: 0, w: 360, h: 330, rank: topRank(space, board), content: { title, description: body || null, frame: { x: 0, y: 0, w: 1300, h: 1100 } } }
-      if (store.commit({ type: "create", node }, kind === "note" ? "add note" : "add board")) spawn([node.id])
+      const node: SceneNode = { id: newId("note"), type: "note", parentId: board, ...nearCentre(board, 220, 190), z: 80 + Math.round(Math.random() * 30), w: 220, h: 190, rank: topRank(space, board), content: { title, body } }
+      if (store.commit({ type: "create", node }, "add note")) spawn([node.id])
     },
     [lay.focus, nearCentre, space, spawn, store, toast],
+  )
+
+  /**
+   * Put a new, blank item on the canvas: centred exactly where it was dropped (screen px, or the
+   * middle of the view), on whichever board is there. Notes and boards open for typing at once.
+   */
+  const place = useCallback(
+    (kind: ToolKind, client: { x: number; y: number } | null) => {
+      const r = viewportRef.current?.getBoundingClientRect()
+      const pt = client && r ? { x: client.x - r.left, y: client.y - r.top } : { x: engine.vp.w / 2, y: engine.vp.h / 2 }
+      const board = boardAt(pt.x, pt.y, [], true)
+      if (!store.canEdit(board)) return toast("You can only view this board.")
+      const rank = topRank(space, board)
+      const c = space.toFrame(engine.display, board)
+      let node: SceneNode
+      if (kind === "arrow") {
+        // About 180px long on screen, pointing right. Dropped onto something: starts from it.
+        const half = 90 / c.s
+        const on = itemAt(pt.x, pt.y)
+        const from = on && on.node.parentId === board && on.node.type !== "arrow" ? on.node : null
+        const mid = localAt(board, pt.x, pt.y)
+        const start = from ? { x: space.at(from).x + from.w, y: space.at(from).y + from.h / 2 } : { x: mid.x - half, y: mid.y }
+        const g = arrowPatch(start, { x: start.x + half * 2, y: start.y })
+        node = { id: newId("arrow"), type: "arrow", parentId: board, x: g.x, y: g.y, z: 0, w: g.w, h: g.h, rank, content: { ...g.content, from: from?.id ?? null, to: null } }
+      } else if (kind === "note") {
+        const w = 220, h = 190, z = 80 + Math.round(Math.random() * 30)
+        const ss = screenScaleIn(board, z)
+        const at = localFromScreen(c, vp, z, pt.x - (w * ss) / 2, pt.y - (h * ss) / 2, engine.pointer, !reduced)
+        node = { id: newId("note"), type: "note", parentId: board, ...clampInto(board, { w, h }, at.x, at.y), z, w, h, rank, content: { title: "", body: "" } }
+      } else {
+        const w = 360, h = 330
+        const at = localAt(board, pt.x, pt.y)
+        node = { id: newId("board"), type: "board", parentId: board, ...clampInto(board, { w, h }, at.x - w / 2, at.y - h / 2), z: 0, w, h, rank, content: { title: "", description: null, frame: { x: 0, y: 0, w: 1300, h: 1100 } } }
+      }
+      if (!store.commit({ type: "create", node }, `add ${kind}`)) return
+      spawn([node.id])
+      if (kind === "note") setInline({ id: node.id, field: "body" })
+      else if (kind === "board") setInline({ id: node.id, field: "title" })
+      setAnnouncement(`Added ${kind === "arrow" ? "an arrow" : `a ${kind}`} to ${titleOf(space.node(board)!)}`)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [boardAt, clampInto, engine, itemAt, localAt, reduced, space, spawn, store, toast, vp],
   )
 
   const addLink = useCallback(
@@ -543,7 +630,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
         /* the bare link still works */
       }
     },
-    [lay.focus, nearCentre, spawn, store, toast],
+    [lay.focus, nearCentre, space, spawn, store, toast],
   )
 
   const copySelection = useCallback(() => copyNodes(space, selection, store.spaceId), [selection, space, store])
@@ -588,24 +675,37 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
   const editTarget: EditTarget | null = (() => {
     if (!editing) return null
     const n = space.node(editing)
-    if (!n) return null
+    if (!n || n.type === "note" || n.type === "board" || n.type === "arrow") return null
     const p = placedById.get(editing)
-    const rect = p
-      ? n.type === "board"
-        ? { x: p.x, y: p.y - (p.lod === "far" ? 56 : 0), w: n.w * p.scale, h: 44 * p.scale }
-        : { x: p.x, y: p.y, w: n.w * p.scale, h: n.h * p.scale }
-      : { x: vp.w / 2 - 160, y: vp.h / 3, w: 320, h: 200 }
-    const heading = { note: "Edit note", board: "Edit board", image: "Edit image", file: "Rename file", link: "Edit link" }[n.type]
-    return { id: n.id, tone: n.type === "note" ? "note" : "surface", heading, fields: editFields(n), rect }
+    const rect = p ? { x: p.x, y: p.y, w: n.w * p.scale, h: n.h * p.scale } : { x: vp.w / 2 - 160, y: vp.h / 3, w: 320, h: 200 }
+    const heading = { image: "Edit image", file: "Rename file", link: "Edit link" }[n.type]
+    return { id: n.id, tone: "surface", heading, fields: editFields(n), rect }
   })()
 
   const startEdit = useCallback(
-    (n: SceneNode) => {
+    (n: SceneNode, field?: string) => {
+      if (n.type === "arrow") return
       if (!store.canEdit(n.parentId ?? n.id)) return toast("You can only view this board.")
       setSelection([n.id])
-      setEditing(n.id)
+      if (n.type === "note") setInline({ id: n.id, field: field === "title" ? "title" : "body" })
+      else if (n.type === "board") setInline({ id: n.id, field: field === "description" ? "description" : "title" })
+      else setEditing(n.id)
     },
     [store, toast],
+  )
+
+  /** Inline editing finished: save whatever changed, as one undoable edit. */
+  const finishInline = useCallback(
+    (id: string, next: Record<string, string | null>) => {
+      setInline((cur) => (cur?.id === id ? null : cur))
+      const n = space.node(id)
+      if (!n) return
+      const cur = n.content as Record<string, unknown>
+      const changed = Object.fromEntries(Object.entries(next).filter(([k, v]) => (cur[k] ?? "") !== (v ?? "")))
+      if (Object.keys(changed).length) store.commit({ type: "update", id, patch: { content: changed } }, "edit")
+      viewportRef.current?.focus({ preventScroll: true })
+    },
+    [space, store],
   )
 
   // ---------- stacking order ----------
@@ -703,7 +803,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
   // ---------- paste: files, our own clips, links, or text as a note ----------
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
-      if (isTyping(e.target) || editing || creating) return
+      if (isTyping(e.target) || editing || inline) return
       const files = Array.from(e.clipboardData?.files ?? [])
       if (files.length) {
         e.preventDefault()
@@ -717,11 +817,11 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       if (clip) return void paste(clip)
       if (isUrl(text)) return void addLink(text)
       const [first, ...rest] = text.split(/\n+/)
-      createNode("note", first.slice(0, 60), rest.join("\n") || (first.length > 60 ? first : ""))
+      createNote(first.slice(0, 60), rest.join("\n") || (first.length > 60 ? first : ""))
     }
     document.addEventListener("paste", onPaste)
     return () => document.removeEventListener("paste", onPaste)
-  }, [addFiles, addLink, createNode, creating, editing, paste])
+  }, [addFiles, addLink, createNote, editing, inline, paste])
 
   // ---------- pointer: pan, marquee, drag cards (across levels), resize ----------
   const local = (e: { clientX: number; clientY: number }) => {
@@ -745,6 +845,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       }
     }
     if (p?.kind === "resize") space.updateNode(p.orig)
+    if (p?.kind === "arrowEnd") setDropTarget(null)
     pressRef.current = null
     setPress(null)
     setDropTarget(null)
@@ -768,6 +869,15 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
     capture(e.currentTarget, e.pointerId)
     engine.stop()
     const pt = local(e)
+
+    const endHandle = target.closest<HTMLElement>("[data-arrow-end]")
+    if (endHandle) {
+      const [id, end] = endHandle.dataset.arrowEnd!.split(":")
+      const next: Press = { kind: "arrowEnd", pointer: e.pointerId, id, end: end === "1" ? 1 : 2, at: pt, snap: null, moved: false }
+      pressRef.current = next
+      setPress(next)
+      return
+    }
 
     const handle = target.closest<HTMLElement>("[data-resize]")
     if (handle) {
@@ -808,6 +918,8 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       const n = space.node(gid)
       const gp = placedById.get(gid)
       if (!n || !gp || !n.parentId) continue
+      // An arrow attached to something follows it; move it by its ends instead.
+      if (isArrow(n) && (n.content.from || n.content.to)) continue
       const at = space.at(n)
       grabs.push({ id: gid, parent: n.parentId, x: at.x, y: at.y, sx: gp.x, sy: gp.y, ss: gp.scale })
     }
@@ -822,6 +934,8 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       grabs,
       moved: false,
       additive,
+      // Pressed on a note's text or a board's title / description: a click edits it.
+      edit: target.closest<HTMLElement>("[data-edit]")?.dataset.edit ?? null,
     }
     pressRef.current = next
     setPress(next)
@@ -869,6 +983,17 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       p.x = pt.x
       p.y = pt.y
       setPress({ ...p })
+      return
+    }
+    if (p.kind === "arrowEnd") {
+      const n = space.node(p.id)
+      if (!n || !store.canEdit(n.parentId)) return
+      const over = itemAt(pt.x, pt.y, p.id)
+      const snap = over && attachable(n, over.node) ? over.node.id : null
+      pressRef.current = { ...p, at: pt, snap, moved: true }
+      setPress(pressRef.current)
+      if (snap !== dropTarget) setDropTarget(snap)
+      kick()
       return
     }
     if (p.kind === "resize") {
@@ -951,6 +1076,26 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
         setSelection(ids)
         setAnnouncement(`${ids.length} selected`)
       }
+    } else if (p.kind === "arrowEnd") {
+      const n = space.node(p.id)
+      const placed = placedById.get(p.id)
+      if (n && isArrow(n) && placed && p.moved) {
+        // Work out both ends in board units, with the dragged end either free or on its item.
+        const parent = n.parentId!
+        const local = localAt(parent, p.at.x, p.at.y)
+        const boxOf = (id: string): Box | null => {
+          const t = space.node(id)
+          if (!attachable(n, t)) return null
+          const ta = space.at(t!)
+          return { x: ta.x, y: ta.y, w: t!.w, h: t!.h }
+        }
+        const [a, b] = arrowEnds(n, space.at(n), boxOf, { end: p.end, at: local, snap: p.snap })
+        const g = arrowPatch(a, b)
+        const from = p.end === 1 ? p.snap : (n.content.from ?? null)
+        const to = p.end === 2 ? p.snap : (n.content.to ?? null)
+        store.commit({ type: "update", id: n.id, patch: { x: g.x, y: g.y, w: g.w, h: g.h, content: { ...g.content, from, to } } }, p.snap ? "connect arrow" : "move arrow end")
+        if (p.snap) setAnnouncement(`Arrow attached to ${titleOf(space.node(p.snap)!)}`)
+      }
     } else if (p.kind === "resize") {
       const cur = space.node(p.id)
       if (cur && (cur.w !== p.orig.w || cur.h !== p.orig.h)) {
@@ -962,6 +1107,8 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       if (!p.moved) {
         const id = p.primary
         setSelection(p.additive ? (selected.has(id) ? selection.filter((x) => x !== id) : [...selection, id]) : [id])
+        const n = space.node(id)
+        if (p.edit && !p.additive && n && store.canEdit(n.parentId ?? n.id)) startEdit(n, p.edit)
       } else {
         // Put everything back, then commit the move as one undoable edit. Whatever you
         // drag ends up on top of the board it lands on (keeping the group's own order).
@@ -1022,8 +1169,8 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target instanceof Element ? (e.target as HTMLElement) : null
-      if (isTyping(t) || editing || held || menu) return
-      if (creating || e.defaultPrevented || t?.closest("[role=menu], [role=dialog]")) return
+      if (isTyping(t) || editing || inline || held || menu) return
+      if (e.defaultPrevented || t?.closest("[role=menu], [role=dialog]")) return
       const mod = e.metaKey || e.ctrlKey
       const k = e.key.toLowerCase()
       if (mod && k === "z") {
@@ -1073,9 +1220,10 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       }
       if (mod || e.altKey) return
       if ((e.key === "Delete" || e.key === "Backspace") && selection.length) deleteSelection()
-      else if (k === "n" && !store.readOnly) setCreating("note")
-      else if (k === "b" && !store.readOnly) setCreating("board")
-      else if (k === "c") toggleCaptions()
+      else if (k === "n" && !store.readOnly) place("note", null)
+      else if (k === "b" && !store.readOnly) place("board", null)
+      else if (k === "a" && !store.readOnly) place("arrow", null)
+      else if (k === "l") toggleLabels(e.shiftKey ? "boards" : "photos")
       else if (e.key === "+" || e.key === "=") zoomCentre(ZOOM.step)
       else if (e.key === "-" || e.key === "_") zoomCentre(1 / ZOOM.step)
       else if (e.key === "0") fitBoard(lay.focus)
@@ -1091,7 +1239,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [copySelection, creating, deleteSelection, duplicate, editing, engine, fitBoard, flyToBoard, goUp, held, kick, lay.focus, menu, moveLayer, rectOf, selection, space, store, toggleCaptions, undo, vp, zoomCentre])
+  }, [copySelection, deleteSelection, duplicate, editing, engine, fitBoard, flyToBoard, goUp, held, inline, kick, lay.focus, menu, moveLayer, place, rectOf, selection, space, store, toggleLabels, undo, vp, zoomCentre])
 
   const onItemKey = (e: ReactKeyboardEvent<HTMLDivElement>, n: SceneNode) => {
     if (e.target !== e.currentTarget) return
@@ -1113,11 +1261,16 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
   const travel = engine.travel
   const dragging = press?.kind === "items" && press.moved ? new Set(press.grabs.map((g) => g.id)) : null
   const single = selection.length === 1 && !dragging ? placedById.get(selection[0]) : undefined
-  const canResize = !!single && store.canEdit(single.node.parentId) && single.node.w * single.scale < vp.w * 1.5 && single.node.w * single.scale > 40
+  const canResize = !!single && !isArrow(single.node) && store.canEdit(single.node.parentId) && single.node.w * single.scale < vp.w * 1.5 && single.node.w * single.scale > 40
   const peers = [...store.peers.values()]
+  // The selected arrow shows a handle on each end, to drag it free or onto another item.
+  const arrowSel = single && isArrow(single.node) && store.canEdit(single.node.parentId) ? single : undefined
+  const endDrag = press?.kind === "arrowEnd" && press.moved ? press : null
+  const arrowEndsFor = (p: Placed) => (endDrag?.id === p.node.id ? arrowScreenEnds(p, { end: endDrag.end, at: endDrag.at, snap: endDrag.snap }) : arrowScreenEnds(p))
+  const rootClass = ["absolute inset-0", !labels.boards && "zb-hide-board-labels", !labels.photos && "zb-hide-photo-labels"].filter(Boolean).join(" ")
 
   return (
-    <div className={captions ? "absolute inset-0" : "absolute inset-0 zb-clean"}>
+    <div className={rootClass}>
       <div
         ref={viewportRef}
         className={`zb-viewport zb-space${press?.kind === "pan" && press.moved ? " is-panning" : ""}`}
@@ -1144,8 +1297,9 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
           const hit = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
           const target = (hit?.closest("[data-item]") ? hit : e.target) as HTMLElement
           const n = placed.node
+          if (n.type === "arrow") return
           if (n.type === "board") {
-            if (target.closest("[data-board-handle]") && store.canEdit(n.parentId ?? n.id)) return startEdit(n)
+            if (target.closest("[data-board-handle]") && store.canEdit(n.parentId ?? n.id)) return startEdit(n, target.closest<HTMLElement>("[data-edit]")?.dataset.edit)
             const span = Math.min((n.w * placed.scale) / vp.w, (n.h * placed.scale) / vp.h)
             if (span < SPACE.focusSpan) flyToBoard(n.id)
             return
@@ -1182,7 +1336,12 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
           <div key={f.id} className="zb-inner-floor zb-room" style={f.style} aria-hidden />
         ))}
         <div className="zb-vignette" aria-hidden />
-        {ordered.map((p) => (
+        {ordered.map((p) => {
+          if (isArrow(p.node)) {
+            const [a, b] = arrowEndsFor(p)
+            return <ArrowItem key={p.node.id} id={p.node.id} a={a} b={b} scale={p.scale} order={p.order} opacity={p.opacity} selected={selected.has(p.node.id)} hidden={held === p.node.id} />
+          }
+          return (
           <Item
             key={p.node.id}
             placed={p}
@@ -1197,8 +1356,26 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
             morph={morphFor(p.node.id)}
             onKeyDown={onItemKey}
             onFocusItem={(id) => !selected.has(id) && select([id])}
+            editable={store.canEdit(p.node.parentId ?? p.node.id)}
+            inline={inline?.id === p.node.id ? inline.field : null}
+            onInlineDone={finishInline}
+            linkTarget={endDrag?.snap === p.node.id}
           />
-        ))}
+          )
+        })}
+        {arrowSel &&
+          !endDrag &&
+          arrowEndsFor(arrowSel).map((pt, i) => (
+            <button
+              key={i}
+              type="button"
+              className="zb-arrow-end"
+              data-arrow-end={`${arrowSel.node.id}:${i + 1}`}
+              aria-label={i === 0 ? "Move the arrow's start" : "Move the arrow's end"}
+              title="Drag onto an item to attach"
+              style={{ left: pt.x, top: pt.y }}
+            />
+          ))}
         {canResize && single && (
           <button
             type="button"
@@ -1237,26 +1414,35 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       <DraggablePanel id="nav" label="the path" defaultPos={{ corner: "tl", dx: 16, dy: 72 }}>
         <Breadcrumbs path={path.map((b) => ({ id: b.id, title: titleOf(b) }))} onNavigate={(c) => flyToBoard(c.id)} onBack={path.length > 1 ? goUp : undefined} />
       </DraggablePanel>
-      <div className="zb-chrome-tr">
-        <SceneryPicker value={scenery} onChange={onScenery} />
-        {!store.readOnly && <AddMenu onFiles={(f) => void addFiles(f)} onNewNote={() => setCreating("note")} onNewBoard={() => setCreating("board")} />}
-      </div>
+      {!store.readOnly && <Toolbar onPlace={place} onFiles={(f) => void addFiles(f)} />}
       <DraggablePanel id="zoom" label="the zoom controls" defaultPos={{ corner: "br", dx: 16, dy: 16 }}>
         <div className="zb-panel-stack">
           <LevelBadge depth={focusDepth} />
-          <ZoomControls readout={readout} onZoomIn={() => zoomCentre(ZOOM.step)} onZoomOut={() => zoomCentre(1 / ZOOM.step)} onFit={() => fitBoard(lay.focus)} captions={captions} onToggleCaptions={toggleCaptions} />
+          <ZoomControls readout={readout} onZoomIn={() => zoomCentre(ZOOM.step)} onZoomOut={() => zoomCentre(1 / ZOOM.step)} onFit={() => fitBoard(lay.focus)} labels={labels} onToggleLabels={toggleLabels} />
         </div>
       </DraggablePanel>
-      <DraggablePanel id="minimap" label="the map" defaultPos={{ corner: "bl", dx: 16, dy: 16 }} className="zb-minimap-panel">
-        <Minimap space={space} focus={lay.focus} cam={engine.display} vp={vp} onCenter={centerOn} />
+      <DraggablePanel id="minimap" label="the map" defaultPos={{ corner: "bl", dx: 16, dy: 16 }} className={`zb-minimap-panel${mapHidden ? " is-collapsed" : ""}`}>
+        <Minimap space={space} focus={lay.focus} cam={engine.display} vp={vp} onCenter={centerOn} onHide={toggleMap} />
       </DraggablePanel>
-      <CreateDialog kind={creating} where={focusTitle} onClose={() => setCreating(null)} onCreate={createNode} />
+      <button
+        type="button"
+        className={`zb-map-tab${mapHidden ? " is-shown" : ""}`}
+        onClick={toggleMap}
+        aria-label="Show the map"
+        title="Show the map"
+        tabIndex={mapHidden ? 0 : -1}
+        aria-hidden={!mapHidden}
+      >
+        <EyeOff size={15} strokeWidth={2.25} aria-hidden className="zb-map-tab-off" />
+        <Eye size={15} strokeWidth={2.25} aria-hidden className="zb-map-tab-on" />
+      </button>
       {menu && space.node(menu.id) && (
         <ContextMenu
           x={menu.x}
           y={menu.y}
           title={selection.length > 1 && selection.includes(menu.id) ? `${selection.length} items` : titleOf(space.node(menu.id)!)}
           canEdit={store.canEdit(space.node(menu.id)!.parentId ?? menu.id)}
+          canRename={space.node(menu.id)!.type !== "arrow"}
           layerable={layerable(menu.id)}
           exportable={!!store.spaceId && !store.publicToken && space.node(menu.id)!.type === "board" && !(selection.length > 1 && selection.includes(menu.id))}
           onAction={(a) => onMenuAction(menu.id, a)}
@@ -1312,9 +1498,17 @@ type ItemProps = {
   morph: { extra: number; fade: number; fx: number; fy: number } | null
   onKeyDown(e: ReactKeyboardEvent<HTMLDivElement>, n: SceneNode): void
   onFocusItem(id: string): void
+  editable: boolean
+  /** The field being edited in place on this card, if any. */
+  inline: NoteField | BoardField | null
+  onInlineDone(id: string, next: Record<string, string | null>): void
+  /** An arrow end being dragged would attach here. */
+  linkTarget: boolean
 }
 
-function Item({ placed, space, tactile, selected, multi, reduced, dragging, dropTarget, hidden, morph, onKeyDown, onFocusItem }: ItemProps) {
+type CardEdit = { editable: boolean; inline: NoteField | BoardField | null; onDone(next: Record<string, string | null>): void }
+
+function Item({ placed, space, tactile, selected, multi, reduced, dragging, dropTarget, hidden, morph, onKeyDown, onFocusItem, editable, inline, onInlineDone, linkTarget }: ItemProps) {
   const { node: n, order, reveal, lod } = placed
   let { x, y, scale, opacity } = placed
   if (morph) {
@@ -1345,7 +1539,7 @@ function Item({ placed, space, tactile, selected, multi, reduced, dragging, drop
   }
   return (
     <div
-      className={`zb-node${dragging ? " is-dragging" : ""}${multi ? " is-multi" : ""}${n.type === "board" && reveal > 0.3 ? " is-open" : ""}`}
+      className={`zb-node${dragging ? " is-dragging" : ""}${multi ? " is-multi" : ""}${n.type === "board" && reveal > 0.3 ? " is-open" : ""}${linkTarget ? " is-link-target" : ""}${inline ? " is-editing" : ""}`}
       data-item={n.id}
       style={style}
       tabIndex={0}
@@ -1356,7 +1550,7 @@ function Item({ placed, space, tactile, selected, multi, reduced, dragging, drop
       onFocus={(e) => e.target === e.currentTarget && onFocusItem(n.id)}
     >
       {n.type !== "board" && n.w * scale < 1600 && <div className="zb-hshadow" aria-hidden />}
-      {renderCard(n, placed, space, tactile, selected && !multi, reduced, lod, dropTarget, n.w * scale, f)}
+      {renderCard(n, placed, space, tactile, selected && !multi, reduced, lod, dropTarget, n.w * scale, f, { editable, inline, onDone: (next) => onInlineDone(n.id, next) })}
     </div>
   )
 }
@@ -1370,10 +1564,25 @@ function pick(c: { src: string; thumb_256?: string; thumb_1024?: string }, scree
   return c.src
 }
 
-function renderCard(n: SceneNode, placed: Placed, space: Space, tactile: Tactile, selected: boolean, reduced: boolean, lod: Placed["lod"], dropTarget: boolean, screenW: number, f: number) {
+function renderCard(n: SceneNode, placed: Placed, space: Space, tactile: Tactile, selected: boolean, reduced: boolean, lod: Placed["lod"], dropTarget: boolean, screenW: number, f: number, edit: CardEdit) {
   const progress = (n.content as { progress?: number; status?: string }).status === "uploading" ? ((n.content as { progress?: number }).progress ?? 0) : undefined
   if (n.type === "image") return <ImageCard title={n.content.title} alt={n.content.alt} src={pick(n.content, screenW)} lod={lod} selected={selected} tactile={tactile} reduced={reduced} progress={progress} />
-  if (n.type === "note") return <NoteCard title={n.content.title} body={n.content.body} w={n.w / f} h={n.h / f} lod={lod} selected={selected} tactile={tactile} reduced={reduced} />
+  if (n.type === "note")
+    return (
+      <NoteCard
+        title={n.content.title}
+        body={n.content.body}
+        w={n.w / f}
+        h={n.h / f}
+        lod={lod}
+        selected={selected}
+        tactile={tactile}
+        reduced={reduced}
+        editing={edit.inline === "title" || edit.inline === "body" ? edit.inline : null}
+        onDone={edit.onDone}
+      />
+    )
+  if (n.type === "arrow") return null
   if (n.type === "file")
     return (
       <FileCard
@@ -1404,6 +1613,9 @@ function renderCard(n: SceneNode, placed: Placed, space: Space, tactile: Tactile
       innerFloor={floorFor(placed.level + 1)}
       innerDot={{ pitch: 24 * io.k, ox: io.ox, oy: io.oy }}
       dropTarget={dropTarget}
+      editable={edit.editable}
+      editing={edit.inline === "title" || edit.inline === "description" ? edit.inline : null}
+      onDone={(next) => edit.onDone({ title: next.title, description: next.description || null })}
     />
   )
 }
@@ -1413,5 +1625,6 @@ function label(n: SceneNode): string {
   if (n.type === "image") return `Image: ${n.content.title}. ${n.content.alt}`
   if (n.type === "file") return `File: ${n.content.title}`
   if (n.type === "link") return `Link: ${titleOf(n)}`
+  if (n.type === "arrow") return "Arrow"
   return `Note: ${n.content.title}. ${n.content.body}`
 }

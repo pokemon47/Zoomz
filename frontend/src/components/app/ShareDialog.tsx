@@ -64,7 +64,7 @@ export function ShareDialog({ spaceId, title, space, open, onClose }: Props) {
       <DialogContent className="zb-dialog zb-dialog-wide zb-share" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="zb-dialog-title">Share “{title}”</DialogTitle>
-          <DialogDescription>{owner ? "Invite people, or turn on a link." : "People on this board."}</DialogDescription>
+          <DialogDescription>{owner ? "Invite people, or turn on a link." : "People on this canvas."}</DialogDescription>
         </DialogHeader>
 
         {owner && (

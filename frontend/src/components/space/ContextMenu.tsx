@@ -9,6 +9,8 @@ type Props = {
   y: number
   title: string
   canEdit: boolean
+  /** Offer "Edit title & caption" (not for arrows, which have no text). */
+  canRename?: boolean
   /** Which layer moves would change anything (front/forward disabled when already on top…). */
   layerable: Record<LayerMove, boolean>
   /** Offer "Export as zip" (boards, when saved on the server). */
@@ -20,7 +22,7 @@ type Props = {
 const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+"
 
 /** Right-click menu for a card: Edit, Layer ▸, Delete. Keyboard: arrows, → opens Layer, Esc closes. */
-export function ContextMenu({ x, y, title, canEdit, layerable, exportable, onAction, onClose }: Props) {
+export function ContextMenu({ x, y, title, canEdit, canRename = true, layerable, exportable, onAction, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [sub, setSub] = useState(false)
   const [pos, setPos] = useState({ x, y })
@@ -108,7 +110,7 @@ export function ContextMenu({ x, y, title, canEdit, layerable, exportable, onAct
       <div className="zb-ctx-title" aria-hidden>
         {title}
       </div>
-      <Item icon={<Pencil />} label="Edit title & caption" hint="↵" disabled={!canEdit} onClick={() => act({ kind: "edit" })} />
+      {canRename && <Item icon={<Pencil />} label="Edit title & caption" hint="↵" disabled={!canEdit} onClick={() => act({ kind: "edit" })} />}
       <div className="zb-ctx-sub" onPointerEnter={openSub} onPointerLeave={closeSubSoon}>
         <button
           type="button"

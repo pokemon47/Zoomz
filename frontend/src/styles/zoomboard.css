@@ -490,8 +490,6 @@
 .zb-swatch:active { transform: translateY(2px); box-shadow: 0 1px 0 0 var(--surface-side); }
 .zb-swatch[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--surface), 0 0 0 6px var(--cobalt); }
 .zb-swatch:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 4px; }
-.zb-chrome-tr { position: absolute; top: var(--space-4); right: var(--space-4); z-index: 20; display: flex; gap: var(--space-3); align-items: center; pointer-events: none; }
-.zb-chrome-tr > * { pointer-events: auto; }
 
 /* ---------- menus & dialogs (shadcn, restyled: matte faces, lift shadows, no outlines) ---------- */
 .zb-menu { min-width: 220px; padding: 6px; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--zb-l2); border: 0; outline: none; }
@@ -529,7 +527,6 @@
 .zb-drop-pill { font: 700 14px/1 var(--zb-sans); padding: 12px 18px; border-radius: var(--radius-full); color: var(--on-cobalt); box-shadow: var(--zb-l2); }
 
 @media (max-width: 1000px) {
-  .zb-chrome-tr, .zb-board-page .zb-chrome-tr { top: auto; bottom: 84px; flex-direction: column-reverse; align-items: flex-end; }
 }
 
 /* the board you're standing in, at screen size (no giant scaled card) */
@@ -622,7 +619,6 @@
 .zb-board-page { position: absolute; inset: 0; }
 .zb-board-page .zb-topbar { position: absolute; top: 0; left: 0; right: 0; z-index: 25; background: transparent; pointer-events: none; }
 .zb-board-page .zb-topbar > * { pointer-events: auto; }
-.zb-board-page .zb-chrome-tr { top: 76px; }
 
 /* logo: a tiny stack of slabs */
 .zb-logo { position: relative; width: 56px; height: 52px; margin: 0 auto; }
@@ -690,7 +686,7 @@
 /* home */
 .zb-home { max-width: 1180px; margin: 0 auto; padding: var(--space-4) var(--space-6) var(--space-12); }
 .zb-home-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; margin: var(--space-4) 0 var(--space-8); }
-.zb-home-actions { display: flex; gap: var(--space-2); }
+.zb-home-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .zb-tabs { display: inline-flex; gap: 4px; padding: 5px; border-radius: 999px; background: var(--surface); box-shadow: var(--zb-l1); flex-wrap: wrap; }
 .zb-tab { border: 0; background: none; padding: 9px 14px; border-radius: 999px; font: 700 14px/1 var(--zb-sans); color: var(--ink-muted); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
 .zb-tab[aria-selected="true"] { background: var(--surface-sunk); color: var(--ink); box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.07); }
@@ -850,9 +846,115 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
 .zb-segment:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .zb-segment { transition: none; } }
 
-/* Captions off: pictures only. Images grow into the caption strip; boards keep their title
-   strip as an (invisible) drag handle, and lose their label chip when seen from afar. */
-.zb-clean .zb-img-caption { display: none; }
-.zb-clean .zb-inner-titles,
-.zb-clean .zb-head-meta,
-.zb-clean .zb-board.zb-far .zb-inner-head { visibility: hidden; }
+/* Labels off. Board labels: titles and descriptions go, but the title strip stays an (invisible)
+   drag handle, and boards seen from afar lose their label chip. Photo labels: image captions go
+   and the picture fills its card. Each works on its own. */
+.zb-hide-photo-labels .zb-img-caption { display: none; }
+.zb-hide-board-labels .zb-inner-titles,
+.zb-hide-board-labels .zb-head-meta,
+.zb-hide-board-labels .zb-board.zb-far .zb-inner-head { visibility: hidden; }
+.zb-zoom-sep { width: 1px; height: 22px; margin: 0 2px; background: var(--surface-side); }
+
+/* ---------- side toolbar: drag things onto the canvas ---------- */
+.zb-toolbar {
+  position: absolute; left: var(--space-4); top: 50%; transform: translateY(-50%); z-index: 21;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px;
+  border-radius: var(--radius-full); background: var(--surface); box-shadow: var(--zb-l2);
+}
+.zb-tool {
+  width: 38px; height: 38px; border: 0; padding: 0; border-radius: var(--radius-full);
+  display: grid; place-items: center; background: none; color: var(--ink); cursor: grab; touch-action: none;
+  transition: background 140ms ease-out, transform 200ms var(--zb-spring);
+}
+.zb-tool svg { width: 19px; height: 19px; }
+.zb-tool:hover { background: var(--surface-sunk); transform: scale(1.06); }
+.zb-tool:active, .zb-tool.is-dragging { cursor: grabbing; transform: scale(0.94); }
+.zb-tool:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 2px; }
+.zb-tool-sep { width: 20px; height: 1px; margin: 3px 0; background: var(--surface-side); }
+.zb-tip kbd { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: rgba(255, 255, 255, 0.18); font: 600 11px/1.3 var(--zb-mono); }
+/* What you're carrying while dragging from the toolbar, centred on the pointer. */
+.zb-tool-ghost { position: fixed; z-index: 90; pointer-events: none; transform: translate(-50%, -50%) rotate(-2deg); opacity: 0.92; animation: zb-ghost-in 160ms var(--zb-spring) both; }
+.zb-tool-ghost.is-note { width: 88px; height: 76px; border-radius: 10px; background: var(--lemon); box-shadow: 0 5px 0 0 var(--lemon-side), 0 16px 24px -10px rgba(0, 0, 0, 0.3); }
+.zb-tool-ghost.is-board { width: 118px; height: 98px; border-radius: 14px; background: var(--surface); box-shadow: 6px 7px 0 0 var(--lilac), 12px 14px 0 0 var(--mint), 0 18px 26px -12px rgba(0, 0, 0, 0.3); }
+.zb-tool-ghost.is-arrow { color: var(--ink); transform: translate(-50%, -50%); }
+@keyframes zb-ghost-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.6); } }
+@media (max-width: 720px) { .zb-toolbar { top: auto; bottom: 84px; transform: none; } }
+
+/* ---------- arrows ---------- */
+.zb-arrow { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.zb-arrow-hit { stroke: transparent; stroke-linecap: round; pointer-events: stroke; cursor: pointer; }
+.zb-arrow-line { stroke: var(--ink); stroke-opacity: 0.9; stroke-linecap: round; transition: stroke 140ms ease-out; }
+.zb-arrow-head { fill: var(--ink); fill-opacity: 0.9; transition: fill 140ms ease-out; }
+.zb-arrow-casing { stroke: var(--surface); stroke-opacity: 0.85; stroke-linecap: round; stroke-linejoin: round; fill: var(--surface); fill-opacity: 0.85; }
+.zb-arrow-glow { stroke: var(--cobalt); stroke-opacity: 0.22; stroke-linecap: round; }
+.zb-arrow:hover .zb-arrow-line, .zb-arrow.is-selected .zb-arrow-line { stroke: var(--cobalt); stroke-opacity: 1; }
+.zb-arrow:hover .zb-arrow-head, .zb-arrow.is-selected .zb-arrow-head { fill: var(--cobalt); fill-opacity: 1; }
+.zb-arrow-end {
+  position: absolute; z-index: 45900; width: 16px; height: 16px; margin: -8px 0 0 -8px; padding: 0; border-radius: 50%;
+  border: 3px solid var(--cobalt); background: var(--surface); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); cursor: grab; touch-action: none;
+  transition: transform 160ms var(--zb-spring);
+}
+.zb-arrow-end:hover { transform: scale(1.25); }
+/* An arrow end would attach here. */
+.zb-node.is-link-target > :not(.zb-hshadow) { outline: 3px solid var(--cobalt); outline-offset: 4px; border-radius: 14px; }
+
+/* ---------- editing text where it sits ---------- */
+.zb-node.is-editing { z-index: 46000 !important; }
+.zb-note-empty { color: rgba(23, 19, 31, 0.38); font: 600 1em/1.3 var(--zb-sans); }
+.zb-note-edit { display: flex; flex-direction: column; cursor: text; }
+.zb-note-edit input, .zb-note-edit textarea {
+  display: block; width: 100%; border: 0; padding: 0; margin: 0; background: none; color: inherit; outline: none; resize: none;
+  font-size: inherit; line-height: inherit; overflow-wrap: anywhere; white-space: pre-wrap;
+}
+.zb-note-edit textarea { flex: 1; min-height: 0; margin-top: 0.35em; }
+.zb-note-edit ::placeholder { color: rgba(23, 19, 31, 0.35); }
+.zb-note.is-editing { box-shadow: 0 0 0 3px var(--cobalt), var(--zb-l2); }
+[data-edit] { cursor: text; }
+.zb-inner-title.is-empty, .zb-inner-caption.is-empty { color: var(--ink-muted); opacity: 0.7; font-style: normal; }
+.zb-inner-caption.is-empty { opacity: 0.55; }
+.zb-label-edit { flex: 1; }
+.zb-label-edit input {
+  min-width: 0; width: 100%; border: 0; margin: 0; padding: 2px 6px; border-radius: 6px; outline: none;
+  background: var(--surface-sunk); color: var(--ink); box-shadow: inset 0 0 0 2px var(--cobalt);
+}
+.zb-label-edit input.zb-inner-title { font: 800 17px/1.2 var(--zb-disp); }
+.zb-label-edit input.zb-inner-caption { font: 500 11px/1.3 var(--zb-sans); box-shadow: inset 0 0 0 1.5px var(--cobalt); }
+.zb-label-edit input::placeholder { color: var(--ink-muted); }
+
+/* ---------- scenery: one small swatch in the header that opens into the rest on hover ---------- */
+.zb-sky-picker { display: inline-flex; align-items: center; height: 30px; padding: 0 6px; border-radius: var(--radius-full); background: var(--surface); box-shadow: var(--zb-l1); }
+.zb-sky-current { width: 18px; height: 18px; flex: none; border-radius: 50%; border: 0; padding: 0; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1); transition: transform 200ms var(--zb-spring); }
+.zb-sky-current:hover { transform: scale(1.1); }
+.zb-sky-current:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 3px; }
+.zb-sky-options { display: inline-flex; align-items: center; gap: 6px; max-width: 0; opacity: 0; overflow: hidden; transition: max-width 260ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease-out, padding 260ms ease-out; }
+.zb-sky-picker.is-open .zb-sky-options { max-width: 200px; opacity: 1; padding: 0 2px 0 8px; }
+.zb-sky-picker .zb-swatch { width: 18px; height: 18px; flex: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1); transform: scale(0.6); transition: transform 240ms var(--zb-spring); }
+.zb-sky-picker.is-open .zb-swatch { transform: none; }
+.zb-sky-picker.is-open .zb-swatch:hover { transform: translateY(-2px) scale(1.08); }
+@media (prefers-reduced-motion: reduce) { .zb-sky-options, .zb-sky-picker .zb-swatch { transition: none; } }
+
+/* ---------- minimap: folds away to a small tab at the side ---------- */
+.zb-minimap-hide { flex: none; width: 24px; height: 24px; margin: -4px -4px -4px 0; border: 0; padding: 0; border-radius: 50%; display: grid; place-items: center; background: none; color: var(--ink-muted); cursor: pointer; }
+.zb-minimap-hide:hover { background: var(--surface-sunk); color: var(--ink); }
+.zb-minimap-hide:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 2px; }
+.zb-minimap-panel { transition: opacity 220ms ease-out, transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s; transform-origin: left bottom; }
+.zb-minimap-panel.is-collapsed { opacity: 0; transform: translateX(-24px) scale(0.85); visibility: hidden; pointer-events: none; transition: opacity 180ms ease-in, transform 220ms ease-in, visibility 0s 220ms; }
+.zb-map-tab {
+  position: absolute; left: 0; bottom: 96px; z-index: 21; width: 30px; height: 34px; padding: 0 0 0 4px; border: 0;
+  border-radius: 0 var(--radius-full) var(--radius-full) 0; display: grid; place-items: center;
+  background: var(--surface); color: var(--ink-muted); box-shadow: var(--zb-l1); cursor: pointer;
+  transform: translateX(-100%); opacity: 0; pointer-events: none;
+  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease-out, color 140ms;
+}
+.zb-map-tab.is-shown { transform: none; opacity: 1; pointer-events: auto; transition-delay: 120ms; }
+.zb-map-tab:hover { color: var(--ink); width: 34px; }
+.zb-map-tab .zb-map-tab-on { display: none; }
+.zb-map-tab:hover .zb-map-tab-on, .zb-map-tab:focus-visible .zb-map-tab-on { display: block; }
+.zb-map-tab:hover .zb-map-tab-off, .zb-map-tab:focus-visible .zb-map-tab-off { display: none; }
+.zb-map-tab:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .zb-minimap-panel, .zb-map-tab { transition: none; } }
+@media (max-width: 720px) { .zb-map-tab { display: none; } }
+/* Seen from afar the label is counter-scaled to stay readable; so is its editor. */
+.zb-board.zb-far .zb-label-edit { flex-direction: column; gap: calc(4px / var(--s, 1)); }
+.zb-board.zb-far .zb-label-edit input.zb-inner-title { font-size: clamp(17px, calc(13px / var(--s, 1)), 90px); padding: 0.2em 0.45em; border-radius: 0.4em; min-width: calc(220px / var(--s, 1)); }
+.zb-board.zb-far .zb-label-edit input.zb-inner-caption { font-size: clamp(11px, calc(10px / var(--s, 1)), 60px); padding: 0.25em 0.6em; border-radius: 0.5em; min-width: calc(220px / var(--s, 1)); }

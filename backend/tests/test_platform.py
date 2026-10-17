@@ -548,7 +548,7 @@ def test_export_board_as_zip_with_folders_and_manifest(make_client):
     assert z.read("Trip_ 2026/Day 1/Plan.md").decode() == "# Plan\n\nSwim\n"
     assert "https://example.com/map" in z.read("Trip_ 2026/links.md").decode()
     m = _json.loads(z.read("Trip_ 2026/zoomz-manifest.json"))
-    assert m["zoomzExport"] == 1 and m["rootBoardId"] == trip
+    assert m["zoomzExport"] == 2 and m["rootBoardId"] == trip
     by_id = {n["id"]: n for n in m["nodes"]}
     # Two boards with the same name get distinct folders; layout is kept.
     assert {by_id[day]["path"], by_id[dup]["path"]} == {"Trip_ 2026/Day 1/", "Trip_ 2026/Day 1 (2)/"}
@@ -612,3 +612,88 @@ def test_pasted_files_survive_losing_the_original(make_client):
     # The original workspace goes away; the pasted copy keeps working.
     assert c.delete(f"/api/workspaces/{team['id']}", headers=H).status_code == 200
     assert c.get(copied.json()["src"]).status_code == 200
+
+
+# ---------------------------------------------------------------- canvases: arrows, duplicate, export → import
+
+
+def _canvas_with_everything(c):
+    sid = first_space(c)["id"]
+    root = scene(c, sid)["rootBoardId"]
+    trip, n1, n2, arrow = uid("board"), uid("note"), uid("note"), uid("arrow")
+    up = c.post(f"/api/spaces/{sid}/files", params={"board": root}, files={"file": ("sea.png", png_bytes(), "image/png")}, headers=H).json()
+    img = uid("img")
+    ops = [
+        {"type": "create", "node": {"id": trip, "type": "board", "parentId": root, "x": 900, "y": 40, "w": 360, "h": 300, "rank": 3, "content": {"title": "Trip", "description": "Summer", "frame": {"x": 0, "y": 0, "w": 1200, "h": 1000}}}},
+        {"type": "create", "node": {"id": n1, "type": "note", "parentId": trip, "x": 100, "y": 120, "z": 90, "w": 220, "h": 190, "rank": 7, "content": {"title": "", "body": "Swim"}}},
+        {"type": "create", "node": {"id": n2, "type": "note", "parentId": trip, "x": 140, "y": 150, "z": 95, "w": 220, "h": 190, "rank": 8, "content": {"title": "Pack", "body": "Hat"}}},
+        {"type": "create", "node": {"id": arrow, "type": "arrow", "parentId": trip, "x": 200, "y": 200, "w": 300, "h": 40, "content": {"x1": 10, "y1": 20, "x2": 290, "y2": 20, "from": n1, "to": n2}}},
+        {"type": "create", "node": {"id": img, "type": "image", "parentId": trip, "x": 600, "y": 300, "z": 30, "w": 220, "h": 160, "rank": 2, "content": {"title": "Sea", "alt": "Blue", "fileId": up["id"]}}},
+    ]
+    assert op(c, sid, {"type": "batch", "ops": ops}).status_code == 200
+    return sid
+
+
+def _shape(c, sid):
+    """Everything about a canvas except ids: the tree of items with their layout and content."""
+    sc = scene(c, sid)
+    nodes = {n["id"]: n for n in sc["nodes"]}
+    def sig(n):
+        content = {k: v for k, v in n["content"].items() if k not in ("fileId", "src", "thumb_256", "thumb_1024", "mime", "size", "kind", "status", "width", "height", "from", "to", "title" if not n["parentId"] else "")}
+        ends = tuple(nodes[n["content"][k]]["content"].get("body") if n["content"].get(k) in nodes else None for k in ("from", "to"))
+        p = nodes.get(n["parentId"]) if n["parentId"] else None
+        parent = None if p is None else ("<top>" if not p["parentId"] else p["content"].get("title"))
+        norm = json.loads(json.dumps(content), parse_int=float)
+        return (n["type"], parent, n["x"], n["y"], n.get("z"), n["w"], n["h"], n.get("rank"), json.dumps(norm, sort_keys=True), ends, bool(n["content"].get("fileId") or n["content"].get("src")))
+    return sorted((sig(n) for n in nodes.values()), key=repr), sc["space"]["scenery"]
+
+
+import json  # noqa: E402
+
+
+def test_arrows_validate_their_ends(make_client):
+    c = make_client("arrows@example.com")
+    sid = first_space(c)["id"]
+    root = scene(c, sid)["rootBoardId"]
+    bad = op(c, sid, {"type": "create", "node": {"id": uid("arrow"), "type": "arrow", "parentId": root, "x": 0, "y": 0, "w": 100, "h": 30, "content": {"x1": "no"}}})
+    assert bad.status_code == 400
+    ok = op(c, sid, {"type": "create", "node": {"id": uid("arrow"), "type": "arrow", "parentId": root, "x": 0, "y": 0, "w": 100, "h": 30, "content": {}}})
+    assert ok.status_code == 200 and ok.json()["changes"][0]["node"]["content"] == {"x1": 0.0, "y1": 0.0, "x2": 160.0, "y2": 0.0}
+
+
+def test_duplicate_canvas_copies_everything(make_client):
+    c = make_client("dup@example.com")
+    sid = _canvas_with_everything(c)
+    c.patch(f"/api/spaces/{sid}", json={"scenery": "cosmos"}, headers=H)
+    r = c.post(f"/api/spaces/{sid}/duplicate", json={}, headers=H)
+    assert r.status_code == 200, r.text
+    copy = r.json()
+    assert copy["id"] != sid and copy["title"].endswith("(copy)")
+    a, b = _shape(c, copy["id"]), _shape(c, sid)
+    assert [x for x in a[0] if x not in b[0]] == [x for x in b[0] if x not in a[0]] == [] and a[1] == b[1]
+    # The copy's picture is its own file, and still loads after the original goes.
+    img = next(n for n in scene(c, copy["id"])["nodes"] if n["content"].get("fileId"))
+    orig = next(n for n in scene(c, sid)["nodes"] if n["content"].get("fileId"))
+    assert img["content"]["fileId"] != orig["content"]["fileId"]
+    assert c.delete(f"/api/spaces/{sid}", headers=H).status_code == 200
+    assert c.get(img["content"]["src"]).status_code == 200
+    assert make_client("dup-stranger@example.com").post(f"/api/spaces/{copy['id']}/duplicate", json={}, headers=H).status_code in (403, 404)
+
+
+def test_export_then_import_rebuilds_the_canvas_exactly(make_client):
+    c = make_client("roundtrip@example.com")
+    sid = _canvas_with_everything(c)
+    c.patch(f"/api/spaces/{sid}", json={"scenery": "dunes"}, headers=H)
+    z = c.get(f"/api/spaces/{sid}/export").content
+    r = c.post("/api/spaces/import", files={"file": ("canvas.zip", z, "application/zip")}, headers=H)
+    assert r.status_code == 200, r.text
+    new = r.json()["id"]
+    assert new != sid
+    a, b = _shape(c, new), _shape(c, sid)
+    assert [x for x in a[0] if x not in b[0]] == [x for x in b[0] if x not in a[0]] == [] and a[1] == b[1]
+    img = next(n for n in scene(c, new)["nodes"] if n["content"].get("fileId"))
+    assert c.get(img["content"]["src"]).status_code == 200
+    # Not a zip / no manifest: a clear error, nothing created.
+    before = len(c.get("/api/spaces").json()["mine"])
+    assert c.post("/api/spaces/import", files={"file": ("x.zip", b"nope", "application/zip")}, headers=H).status_code == 422
+    assert len(c.get("/api/spaces").json()["mine"]) == before

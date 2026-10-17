@@ -61,7 +61,15 @@ export type LinkNode = BaseNode & {
   content: { url: string; title?: string; description?: string; image?: string | null; site?: string; embed?: string | null }
 }
 
-export type SceneNode = BoardNode | ImageNode | NoteNode | FileNode | LinkNode
+/** An arrow on a board. Its ends are points relative to the arrow's own x/y (board units);
+ *  either end can be attached to another item on the same board (`from` / `to` = its id),
+ *  and then follows that item around. */
+export type ArrowNode = BaseNode & {
+  type: "arrow"
+  content: { x1: number; y1: number; x2: number; y2: number; from?: string | null; to?: string | null }
+}
+
+export type SceneNode = BoardNode | ImageNode | NoteNode | FileNode | LinkNode | ArrowNode
 
 export type Role = "owner" | "editor" | "viewer"
 

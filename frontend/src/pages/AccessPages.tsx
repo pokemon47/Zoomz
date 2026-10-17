@@ -51,7 +51,7 @@ function EmailInvitePage({ token }: { token: string }) {
   if (error) return <Page><StatePanel kind="error" title="This invite didn't work" message={error} onRetry={() => navigate(user ? "/" : "/login")} /></Page>
   if (!info || loading) return <Page><StatePanel kind="loading" title="Opening your invite" /></Page>
   const what = info.role === "viewer" ? "view" : "edit"
-  const thing = info.kind === "workspace" ? `the boards in the workspace “${info.title}”` : `the board “${info.title}”`
+  const thing = info.kind === "workspace" ? `the canvases in the workspace “${info.title}”` : `the canvas “${info.title}”`
   const mismatch = user && info.email && user.email !== info.email
   return (
     <Page>
@@ -73,7 +73,7 @@ function EmailInvitePage({ token }: { token: string }) {
         ) : (
           <>
             <Button variant="primary" autoFocus onClick={() => redeem()} disabled={busy}>
-              {busy ? "Opening…" : info.kind === "workspace" ? "Open the workspace" : "Open the board"}
+              {busy ? "Opening…" : info.kind === "workspace" ? "Open the workspace" : "Open the canvas"}
             </Button>
             {!user && <p className="zb-fine">You'll join as {info.email}. No password or extra email needed.</p>}
           </>
@@ -112,10 +112,10 @@ function JoinPage({ token }: { token: string }) {
     <Page>
       <div className="zb-panel zb-login">
         <h1 className="zb-login-title">{info.title}</h1>
-        <p>You've been invited to {what} this board.</p>
+        <p>You've been invited to {what} this canvas.</p>
         {user ? (
           <Button variant="primary" onClick={accept} disabled={busy}>
-            {busy ? "Opening…" : "Open the board"}
+            {busy ? "Opening…" : "Open the canvas"}
           </Button>
         ) : (
           <Button variant="primary" onClick={() => navigate(`/login?next=${encodeURIComponent(location.pathname)}`)}>

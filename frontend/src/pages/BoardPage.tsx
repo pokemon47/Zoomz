@@ -6,6 +6,7 @@ import { useToast } from "@/app/toasts"
 import { SearchDialog } from "@/components/app/SearchDialog"
 import { ShareDialog } from "@/components/app/ShareDialog"
 import { Avatar, TopBar } from "@/components/app/TopBar"
+import { SceneryPicker } from "@/components/zoomboard/SceneryPicker"
 import { SpaceCanvas, type CanvasController } from "@/components/space/SpaceCanvas"
 import { StatePanel } from "@/components/zoomboard/StatePanel"
 import { fetchScene } from "@/lib/api"
@@ -156,7 +157,7 @@ function LiveBoard({ store }: { store: SceneStore }) {
   if (store.status === "kicked") {
     return (
       <main className="zb-page zb-page-center">
-        <StatePanel kind="error" title="This board isn't available" message={store.kickedReason} onRetry={() => location.reload()} />
+        <StatePanel kind="error" title="This canvas isn't available" message={store.kickedReason} onRetry={() => location.reload()} />
       </main>
     )
   }
@@ -166,15 +167,14 @@ function LiveBoard({ store }: { store: SceneStore }) {
       <SpaceCanvas
         store={store}
         scenery={scenery}
-        onScenery={setScenery}
         follow={follow}
         onStopFollow={() => follow && setFollow(null)}
         onToast={toast}
         controller={controller}
       />
-      <TopBar onSearch={() => setSearching(true)}>
+      <TopBar onSearch={() => setSearching(true)} tools={<SceneryPicker value={scenery} onChange={setScenery} />}>
         {store.local ? (
-          <span className="zb-board-title">Demo board · <Link to="/login">sign in to make your own</Link></span>
+          <span className="zb-board-title">Demo canvas · <Link to="/login">sign in to make your own</Link></span>
         ) : (
           <TitleField value={store.title} editable={canEditSpace && !!user} onSave={rename} />
         )}
@@ -243,7 +243,7 @@ function TitleField({ value, editable, onSave }: { value: string; editable: bool
       className="zb-board-title zb-title-input"
       value={v}
       maxLength={120}
-      aria-label="Board name"
+      aria-label="Canvas name"
       onChange={(e) => setV(e.target.value)}
       onBlur={() => onSave(v.trim())}
       onKeyDown={(e) => {

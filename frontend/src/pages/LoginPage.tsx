@@ -43,7 +43,7 @@ export function LoginPage() {
         </div>
         <h1 className="zb-login-title">Zoomz</h1>
         {guestExpired ? (
-          <p role="status">Your guest access has ended. Sign in to keep using Zoomz — your boards are still here.</p>
+          <p role="status">Your guest access has ended. Sign in to keep using Zoomz — your canvases are still here.</p>
         ) : (
           <p>Moodboards you walk into. Sign in to make your own and share them.</p>
         )}
@@ -82,7 +82,7 @@ export function LoginPage() {
           </p>
         )}
         <p className="zb-fine">
-          <Link to="/demo">Try the demo board</Link> · <Link to="/terms">Terms</Link> · <Link to="/privacy">Privacy</Link>
+          <Link to="/demo">Try the demo canvas</Link> · <Link to="/terms">Terms</Link> · <Link to="/privacy">Privacy</Link>
         </p>
       </div>
     </main>
@@ -128,7 +128,7 @@ export function SignInConfirmPage({ token }: { token: string }) {
           </>
         ) : (
           <>
-            <p>You're one click away from your boards.</p>
+            <p>You're one click away from your canvases.</p>
             <Button variant="primary" autoFocus onClick={go} disabled={busy}>
               {busy ? "Signing in…" : "Continue to Zoomz"}
             </Button>

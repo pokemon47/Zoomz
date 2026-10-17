@@ -1,4 +1,4 @@
-import { FileText, Image as ImageIcon, LayoutGrid, Link2, Search, StickyNote } from "lucide-react"
+import { FileText, Image as ImageIcon, LayoutGrid, Link2, MoveUpRight, Search, StickyNote } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { navigate } from "@/app/router"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
@@ -9,7 +9,7 @@ import type { SceneNode } from "@/lib/types"
 
 type Hit = { spaceId: string; spaceTitle: string; node: SceneNode; path: { id: string; title: string }[] }
 
-const ICON = { board: LayoutGrid, image: ImageIcon, note: StickyNote, file: FileText, link: Link2 }
+const ICON = { board: LayoutGrid, image: ImageIcon, note: StickyNote, file: FileText, link: Link2, arrow: MoveUpRight }
 
 type Scope = "board" | "workspace"
 
