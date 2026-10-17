@@ -1,4 +1,4 @@
-import { memo } from "react"
+import { memo, type SyntheticEvent } from "react"
 import type { LOD } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { TactileSlab, type Tactile } from "./TactileSlab"
@@ -26,7 +26,7 @@ export const ImageCard = memo(function ImageCard({ title, alt, src, lod, selecte
       role="img"
       aria-label={`${title}: ${alt}`}
     >
-      <img className="zb-ph" src={src} alt="" draggable={false} decoding="async" />
+      <img className="zb-ph" src={src} alt="" draggable={false} decoding="async" onLoad={keepShape} />
       {progress !== undefined && <Progress value={progress} />}
       {lod !== "far" && (
         <div>
@@ -37,6 +37,12 @@ export const ImageCard = memo(function ImageCard({ title, alt, src, lod, selecte
     </TactileSlab>
   )
 })
+
+/** Size the picture box to the picture itself, so it sits flush at the top of the mat. */
+function keepShape(e: SyntheticEvent<HTMLImageElement>) {
+  const img = e.currentTarget
+  if (img.naturalWidth && img.naturalHeight) img.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`
+}
 
 /** Upload progress as a small lemon bar across the print. */
 export function Progress({ value }: { value: number }) {

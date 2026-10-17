@@ -39,7 +39,7 @@ import { pathTo, titleOf } from "@/lib/scene"
 import { SCENERY, themeById, type SceneryId } from "@/lib/scenery"
 import { layout, lift, localFromScreen, sortByLayer, type Cam, type Layout, type Placed, type Space, type Viewport } from "@/lib/space"
 import { layerOps, topRank, type LayerMove } from "@/lib/layers"
-import { newId, type Op, type SceneStore } from "@/lib/store"
+import { imageCard, newId, type Op, type SceneStore } from "@/lib/store"
 import type { SceneNode } from "@/lib/types"
 import { ContextMenu, type ContextAction } from "./ContextMenu"
 import { Lightbox } from "./Lightbox"
@@ -420,8 +420,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
         const col = i % cols, row = Math.floor(i / cols)
         const ox = (col - (cols - 1) / 2) * cellW, oy = (row - (rows - 1) / 2) * cellH
         const isImage = file.type.startsWith("image/")
-        const w = isImage ? 220 : 200
-        const h = isImage ? Math.round(16 + 204 * ratio + 36) : 240
+        const { w, h } = isImage ? imageCard(ratio) : { w: 200, h: 240 }
         const p = clampInto(board, { w, h }, anchor.x + ox - w / 2, anchor.y + oy - h / 2)
         return { ...p, w, h, z: isImage ? 16 + Math.round(Math.random() * 26) : 12 + Math.round(Math.random() * 18), rank: top + i }
       })

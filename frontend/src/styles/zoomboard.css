@@ -234,12 +234,13 @@
   width: 100%;
   display: block;
   overflow: hidden;
-  object-fit: cover;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
-  background: var(--surface-sunk);
+  /* Never crop: if the card's shape and the picture's ever differ (a resize, captions
+     hidden, a different detail level) the picture shows whole on the mat. */
+  object-fit: contain;
   -webkit-user-drag: none;
   pointer-events: none;
 }
+.zb-img .zb-ph[style*="aspect-ratio"] { flex: 0 1 auto; height: auto; }
 .zb-img .zb-cap { font: 700 13px/16px var(--zb-sans); padding: 9px 4px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .zb-img.zb-far { padding: 4px; }
 .zb-img.zb-close .zb-cap { font-size: 14px; }

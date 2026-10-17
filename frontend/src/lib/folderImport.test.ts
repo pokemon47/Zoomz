@@ -48,3 +48,14 @@ describe("folder import layout", () => {
     expect(fileCard(file("wide.png"), 0.5)).toEqual({ w: 220, h: Math.round(16 + 204 * 0.5 + 36) })
   })
 })
+
+describe("image cards keep the picture's true shape", () => {
+  it("sizes panoramas and tall shots exactly, without clamping", async () => {
+    const { imageCard } = await import("./store")
+    for (const r of [0.1, 0.25, 0.5, 1, 1.78, 3, 8]) {
+      const { w, h } = imageCard(r)
+      expect((h - 52) / (w - 16)).toBeCloseTo(r, 1)
+      expect(h).toBeLessThanOrEqual(421)
+    }
+  })
+})

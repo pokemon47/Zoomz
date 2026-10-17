@@ -302,10 +302,12 @@ export class SceneStore {
           this.space.removeNode(id)
           const p = this.space.at(cur)
           const content = { ...cur.content, ...stored, fileId: stored.id, src: (stored.src as string) ?? blob }
+          const sw = Number(stored.width), sh = Number(stored.height)
+          const size = isImage && !Number.isFinite(ratio) && sw > 0 && sh > 0 ? { w: cur.w, h: imageCard(sh / sw, cur.w, Infinity).h } : {}
           delete (content as Record<string, unknown>).progress
           delete (content as Record<string, unknown>).id
           delete (content as Record<string, unknown>).filename
-          this.commit({ type: "create", node: { ...cur, x: p.x, y: p.y, content } as SceneNode }, "add files")
+          this.commit({ type: "create", node: { ...cur, ...size, x: p.x, y: p.y, content } as SceneNode }, "add files")
         } catch (e) {
           this.space.removeNode(id)
           this.emit()
@@ -538,11 +540,19 @@ function sendable(op: Op): Op {
   return { type: "create", node: { ...op.node, content } as SceneNode }
 }
 
+/** Image card size for a picture of shape `ratio` (h / w): a 16px mat plus a 36px caption strip. */
+export function imageCard(ratio: number, maxW = 220, maxH = 420): { w: number; h: number } {
+  const r = Number.isFinite(ratio) ? ratio : 1.25
+  const w = Math.max(60, Math.min(maxW, Math.round(16 + (maxH - 52) / r)))
+  return { w, h: Math.round(16 + (w - 16) * r + 36) }
+}
+
 export function imageRatio(src: string): Promise<number> {
   return new Promise((resolve) => {
     const img = new Image()
-    img.onload = () => resolve(Math.min(1.8, Math.max(0.5, img.naturalHeight / Math.max(1, img.naturalWidth))))
-    img.onerror = () => resolve(1.25)
+    // The picture's true shape (height / width); cards are sized to it so nothing is cropped.
+    img.onload = () => resolve(Math.min(20, Math.max(0.05, img.naturalHeight / Math.max(1, img.naturalWidth))))
+    img.onerror = () => resolve(NaN) // e.g. HEIC: the server reports the real size after upload
     img.src = src
   })
 }
