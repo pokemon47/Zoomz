@@ -59,6 +59,7 @@ backend/data/
 *.db
 *.sqlite
 *.sqlite3
+zoomz-demo-assets/
 
 # ==========================================
 # AI Agent & Local Tooling Artifacts
