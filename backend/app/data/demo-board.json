@@ -1,0 +1,553 @@
+{
+  "rootBoardId": "board-root",
+  "nodes": [
+    {
+      "id": "board-root",
+      "type": "board",
+      "parentId": null,
+      "x": 0,
+      "y": 0,
+      "w": 1600,
+      "h": 1100,
+      "content": {
+        "title": "The atlas",
+        "description": "A visual notebook of places, colors and details."
+      }
+    },
+    {
+      "id": "board-coast",
+      "type": "board",
+      "parentId": "board-root",
+      "x": 920,
+      "y": 100,
+      "w": 520,
+      "h": 340,
+      "content": {
+        "title": "Coastlines",
+        "description": "Salt air, pale stone and open water."
+      }
+    },
+    {
+      "id": "board-city",
+      "type": "board",
+      "parentId": "board-root",
+      "x": 920,
+      "y": 540,
+      "w": 520,
+      "h": 340,
+      "content": {
+        "title": "City studies",
+        "description": "Surfaces, signs and evening light."
+      }
+    },
+    {
+      "id": "board-tide",
+      "type": "board",
+      "parentId": "board-coast",
+      "x": 920,
+      "y": 160,
+      "w": 430,
+      "h": 320,
+      "content": {
+        "title": "Tidal forms"
+      }
+    },
+    {
+      "id": "board-night",
+      "type": "board",
+      "parentId": "board-city",
+      "x": 920,
+      "y": 160,
+      "w": 430,
+      "h": 320,
+      "content": {
+        "title": "After dark"
+      }
+    },
+    {
+      "id": "image-root-01",
+      "type": "image",
+      "parentId": "board-root",
+      "x": 80,
+      "y": 120,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "First light",
+        "src": "/assets/artwork-01.svg",
+        "alt": "Abstract artwork for first light"
+      }
+    },
+    {
+      "id": "image-root-02",
+      "type": "image",
+      "parentId": "board-root",
+      "x": 350,
+      "y": 120,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Warm stone",
+        "src": "/assets/artwork-02.svg",
+        "alt": "Abstract artwork for warm stone"
+      }
+    },
+    {
+      "id": "image-root-03",
+      "type": "image",
+      "parentId": "board-root",
+      "x": 620,
+      "y": 120,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Quiet courtyard",
+        "src": "/assets/artwork-03.svg",
+        "alt": "Abstract artwork for quiet courtyard"
+      }
+    },
+    {
+      "id": "image-root-04",
+      "type": "image",
+      "parentId": "board-root",
+      "x": 80,
+      "y": 405,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Rooftop study",
+        "src": "/assets/artwork-04.svg",
+        "alt": "Abstract artwork for rooftop study"
+      }
+    },
+    {
+      "id": "image-root-05",
+      "type": "image",
+      "parentId": "board-root",
+      "x": 350,
+      "y": 405,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Blue hour",
+        "src": "/assets/artwork-05.svg",
+        "alt": "Abstract artwork for blue hour"
+      }
+    },
+    {
+      "id": "image-root-06",
+      "type": "image",
+      "parentId": "board-root",
+      "x": 620,
+      "y": 405,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Paper trail",
+        "src": "/assets/artwork-06.svg",
+        "alt": "Abstract artwork for paper trail"
+      }
+    },
+    {
+      "id": "image-root-07",
+      "type": "image",
+      "parentId": "board-root",
+      "x": 80,
+      "y": 690,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Open window",
+        "src": "/assets/artwork-01.svg",
+        "alt": "Abstract artwork for open window"
+      }
+    },
+    {
+      "id": "image-root-08",
+      "type": "image",
+      "parentId": "board-root",
+      "x": 350,
+      "y": 690,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Sunday market",
+        "src": "/assets/artwork-02.svg",
+        "alt": "Abstract artwork for sunday market"
+      }
+    },
+    {
+      "id": "image-coast-01",
+      "type": "image",
+      "parentId": "board-coast",
+      "x": 80,
+      "y": 120,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Sea glass",
+        "src": "/assets/artwork-01.svg",
+        "alt": "Abstract artwork for sea glass"
+      }
+    },
+    {
+      "id": "image-coast-02",
+      "type": "image",
+      "parentId": "board-coast",
+      "x": 350,
+      "y": 120,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Harbour wall",
+        "src": "/assets/artwork-02.svg",
+        "alt": "Abstract artwork for harbour wall"
+      }
+    },
+    {
+      "id": "image-coast-03",
+      "type": "image",
+      "parentId": "board-coast",
+      "x": 620,
+      "y": 120,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Salt meadow",
+        "src": "/assets/artwork-03.svg",
+        "alt": "Abstract artwork for salt meadow"
+      }
+    },
+    {
+      "id": "image-coast-04",
+      "type": "image",
+      "parentId": "board-coast",
+      "x": 80,
+      "y": 405,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Cove study",
+        "src": "/assets/artwork-04.svg",
+        "alt": "Abstract artwork for cove study"
+      }
+    },
+    {
+      "id": "image-coast-05",
+      "type": "image",
+      "parentId": "board-coast",
+      "x": 350,
+      "y": 405,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Soft horizon",
+        "src": "/assets/artwork-05.svg",
+        "alt": "Abstract artwork for soft horizon"
+      }
+    },
+    {
+      "id": "image-coast-06",
+      "type": "image",
+      "parentId": "board-coast",
+      "x": 620,
+      "y": 405,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Linen sail",
+        "src": "/assets/artwork-06.svg",
+        "alt": "Abstract artwork for linen sail"
+      }
+    },
+    {
+      "id": "image-coast-07",
+      "type": "image",
+      "parentId": "board-coast",
+      "x": 80,
+      "y": 690,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Morning tide",
+        "src": "/assets/artwork-01.svg",
+        "alt": "Abstract artwork for morning tide"
+      }
+    },
+    {
+      "id": "image-city-01",
+      "type": "image",
+      "parentId": "board-city",
+      "x": 80,
+      "y": 120,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Corner caf\u00e9",
+        "src": "/assets/artwork-01.svg",
+        "alt": "Abstract artwork for corner caf\u00e9"
+      }
+    },
+    {
+      "id": "image-city-02",
+      "type": "image",
+      "parentId": "board-city",
+      "x": 350,
+      "y": 120,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Painted door",
+        "src": "/assets/artwork-02.svg",
+        "alt": "Abstract artwork for painted door"
+      }
+    },
+    {
+      "id": "image-city-03",
+      "type": "image",
+      "parentId": "board-city",
+      "x": 620,
+      "y": 120,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Station steps",
+        "src": "/assets/artwork-03.svg",
+        "alt": "Abstract artwork for station steps"
+      }
+    },
+    {
+      "id": "image-city-04",
+      "type": "image",
+      "parentId": "board-city",
+      "x": 80,
+      "y": 405,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Street flowers",
+        "src": "/assets/artwork-04.svg",
+        "alt": "Abstract artwork for street flowers"
+      }
+    },
+    {
+      "id": "image-city-05",
+      "type": "image",
+      "parentId": "board-city",
+      "x": 350,
+      "y": 405,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Old cinema",
+        "src": "/assets/artwork-05.svg",
+        "alt": "Abstract artwork for old cinema"
+      }
+    },
+    {
+      "id": "image-city-06",
+      "type": "image",
+      "parentId": "board-city",
+      "x": 620,
+      "y": 405,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Amber glass",
+        "src": "/assets/artwork-06.svg",
+        "alt": "Abstract artwork for amber glass"
+      }
+    },
+    {
+      "id": "image-city-07",
+      "type": "image",
+      "parentId": "board-city",
+      "x": 80,
+      "y": 690,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Night tram",
+        "src": "/assets/artwork-01.svg",
+        "alt": "Abstract artwork for night tram"
+      }
+    },
+    {
+      "id": "image-tide-01",
+      "type": "image",
+      "parentId": "board-tide",
+      "x": 80,
+      "y": 120,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Tide pool",
+        "src": "/assets/artwork-01.svg",
+        "alt": "Abstract artwork for tide pool"
+      }
+    },
+    {
+      "id": "image-tide-02",
+      "type": "image",
+      "parentId": "board-tide",
+      "x": 350,
+      "y": 120,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Shell study",
+        "src": "/assets/artwork-02.svg",
+        "alt": "Abstract artwork for shell study"
+      }
+    },
+    {
+      "id": "image-tide-03",
+      "type": "image",
+      "parentId": "board-tide",
+      "x": 620,
+      "y": 120,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Ripple pattern",
+        "src": "/assets/artwork-03.svg",
+        "alt": "Abstract artwork for ripple pattern"
+      }
+    },
+    {
+      "id": "image-tide-04",
+      "type": "image",
+      "parentId": "board-tide",
+      "x": 80,
+      "y": 405,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Rock shelf",
+        "src": "/assets/artwork-04.svg",
+        "alt": "Abstract artwork for rock shelf"
+      }
+    },
+    {
+      "id": "image-night-01",
+      "type": "image",
+      "parentId": "board-night",
+      "x": 80,
+      "y": 120,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Window glow",
+        "src": "/assets/artwork-01.svg",
+        "alt": "Abstract artwork for window glow"
+      }
+    },
+    {
+      "id": "image-night-02",
+      "type": "image",
+      "parentId": "board-night",
+      "x": 350,
+      "y": 120,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Neon reflection",
+        "src": "/assets/artwork-02.svg",
+        "alt": "Abstract artwork for neon reflection"
+      }
+    },
+    {
+      "id": "image-night-03",
+      "type": "image",
+      "parentId": "board-night",
+      "x": 620,
+      "y": 120,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Evening rain",
+        "src": "/assets/artwork-03.svg",
+        "alt": "Abstract artwork for evening rain"
+      }
+    },
+    {
+      "id": "image-night-04",
+      "type": "image",
+      "parentId": "board-night",
+      "x": 80,
+      "y": 405,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Last train",
+        "src": "/assets/artwork-04.svg",
+        "alt": "Abstract artwork for last train"
+      }
+    },
+    {
+      "id": "note-01",
+      "type": "note",
+      "parentId": "board-root",
+      "x": 80,
+      "y": 990,
+      "w": 330,
+      "h": 120,
+      "content": {
+        "title": "Direction",
+        "body": "Collect the colors and textures that make a place feel lived in."
+      }
+    },
+    {
+      "id": "note-02",
+      "type": "note",
+      "parentId": "board-coast",
+      "x": 80,
+      "y": 980,
+      "w": 330,
+      "h": 120,
+      "content": {
+        "title": "Field note",
+        "body": "Look for the line where stone meets water."
+      }
+    },
+    {
+      "id": "note-03",
+      "type": "note",
+      "parentId": "board-city",
+      "x": 80,
+      "y": 980,
+      "w": 330,
+      "h": 120,
+      "content": {
+        "title": "Field note",
+        "body": "Small signs tell the story of a street."
+      }
+    },
+    {
+      "id": "note-04",
+      "type": "note",
+      "parentId": "board-tide",
+      "x": 80,
+      "y": 690,
+      "w": 330,
+      "h": 120,
+      "content": {
+        "title": "Detail",
+        "body": "The shapes change with every tide."
+      }
+    },
+    {
+      "id": "note-05",
+      "type": "note",
+      "parentId": "board-night",
+      "x": 80,
+      "y": 690,
+      "w": 330,
+      "h": 120,
+      "content": {
+        "title": "Detail",
+        "body": "Warm windows make a map of the evening."
+      }
+    }
+  ]
+}

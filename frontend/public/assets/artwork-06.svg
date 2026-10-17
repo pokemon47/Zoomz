@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 380" role="img" aria-label="Abstract landscape">
+<rect width="440" height="380" fill="#d9c1b2"/>
+<circle cx="345" cy="94" r="66" fill="#f7dfad" opacity=".88"/>
+<path d="M0 250 Q115 170 220 246 T440 220 V380 H0Z" fill="#637c70" opacity=".75"/>
+<path d="M0 298 Q128 230 252 306 T440 280 V380 H0Z" fill="#637c70" opacity=".55"/>
+<path d="M0 345 Q130 300 248 350 T440 324 V380 H0Z" fill="#637c70" opacity=".8"/>
+</svg>

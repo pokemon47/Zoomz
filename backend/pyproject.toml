@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zoomz-backend"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi==0.127.0",
+  "pydantic==2.12.5",
+  "uvicorn==0.40.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "httpx==0.28.1",
+  "pytest==8.4.1",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+app = ["data/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

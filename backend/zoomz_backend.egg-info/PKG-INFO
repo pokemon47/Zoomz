@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: zoomz-backend
+Version: 0.1.0
+Requires-Python: >=3.10
+Requires-Dist: fastapi==0.127.0
+Requires-Dist: pydantic==2.12.5
+Requires-Dist: uvicorn==0.40.0
+Provides-Extra: test
+Requires-Dist: httpx==0.28.1; extra == "test"
+Requires-Dist: pytest==8.4.1; extra == "test"
