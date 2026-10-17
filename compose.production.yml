@@ -23,6 +23,9 @@ services:
         condition: service_healthy
     environment:
       APP_ENV: production
+      MCP_SOURCE_HOSTS: ${MCP_SOURCE_HOSTS:-}
+      MCP_RENDER_PREVIEWS: ${MCP_RENDER_PREVIEWS:-0}
+      MCP_RENDER_ORIGIN: ${MCP_RENDER_ORIGIN:-http://127.0.0.1:8080}
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL with URL-encoded credentials}
       PUBLIC_URL: ${PUBLIC_URL:?Set the public HTTPS origin}
       SECRET_KEY: ${SECRET_KEY:?Set a stable random secret}

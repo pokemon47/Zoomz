@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import io
 import logging
+import math
 import shutil
 import socket
 import struct
 import subprocess
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -19,6 +21,7 @@ from .config import settings
 log = logging.getLogger("zoomz.media")
 
 THUMBS = (256, 1024)
+_pdf_lock = threading.Lock()
 
 BLOCKED_EXT = {
     "exe", "dll", "msi", "com", "scr", "bat", "cmd", "ps1", "vbs", "jar", "app", "dmg", "pkg", "apk", "deb", "rpm",
@@ -147,22 +150,44 @@ def image_previews(src: Path, out_dir: Path) -> tuple[Optional[int], Optional[in
     return w, h, variants
 
 
-def pdf_preview(src: Path, out_dir: Path) -> tuple[Optional[int], Optional[int], dict[str, str]]:
+def pdf_page(src: Path, number: int, max_edge: int = 1024):
+    """Render one page using the shared PDFium lock; callers own the copied PIL image."""
     import pypdfium2 as pdfium
 
-    pdf = pdfium.PdfDocument(str(src))
+    # PDFium is not thread-safe; uploads and MCP reads can run in separate workers.
+    with _pdf_lock:
+        pdf = pdfium.PdfDocument(str(src))
+        try:
+            count = len(pdf)
+            if not 1 <= number <= count or not 1 <= max_edge <= 1600:
+                raise ValueError("Invalid PDF page or resolution")
+            page = pdf[number - 1]
+            try:
+                pw, ph = page.get_size()
+                if not all(math.isfinite(v) and v > 0 for v in (pw, ph)):
+                    raise ValueError("Invalid PDF dimensions")
+                bitmap = page.render(scale=max_edge / max(pw, ph))
+                try:
+                    return bitmap.to_pil().copy(), count, int(pw), int(ph)
+                finally:
+                    bitmap.close()
+            finally:
+                page.close()
+        finally:
+            pdf.close()
+
+
+def pdf_preview(src: Path, out_dir: Path) -> tuple[Optional[int], Optional[int], dict[str, str]]:
+    img, _, pw, ph = pdf_page(src, 1)
     try:
-        page = pdf[0]
-        pw, ph = page.get_size()
-        scale = 1024 / max(pw, ph)
-        img = page.render(scale=scale).to_pil()
         img.save(out_dir / "preview.webp", "WEBP", quality=82)
         small = img.copy()
         small.thumbnail((256, 256))
         small.save(out_dir / "thumb_256.webp", "WEBP", quality=80)
-        return int(pw), int(ph), {"preview": "preview.webp", "thumb_1024": "preview.webp", "thumb_256": "thumb_256.webp"}
+        small.close()
+        return pw, ph, {"preview": "preview.webp", "thumb_1024": "preview.webp", "thumb_256": "thumb_256.webp"}
     finally:
-        pdf.close()
+        img.close()
 
 
 def ffmpeg_available() -> bool:

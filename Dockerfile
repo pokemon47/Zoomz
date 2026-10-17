@@ -6,7 +6,7 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM python:3.12-slim-bookworm
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PLAYWRIGHT_BROWSERS_PATH=/opt/zoomz-browsers
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends nginx libstdc++6 \
     && apt-get clean && rm -rf /var/lib/apt/lists/* \
@@ -14,6 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends nginx libstdc++
     && mkdir -p /data/uploads && chown zoomz:zoomz /data/uploads
 COPY backend/requirements.lock ./requirements.lock
 RUN pip install --no-cache-dir -r requirements.lock
+RUN python -m playwright install --with-deps --only-shell chromium \
+    && chmod -R a+rX /opt/zoomz-browsers \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 COPY backend/app ./app
 COPY backend/alembic ./alembic
 COPY backend/alembic.ini ./

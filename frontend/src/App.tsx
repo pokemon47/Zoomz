@@ -9,6 +9,8 @@ import { BoardPage } from "@/pages/BoardPage"
 import { HomePage } from "@/pages/HomePage"
 import { LoginPage } from "@/pages/LoginPage"
 import { LegalPage, SettingsPage } from "@/pages/SettingsPage"
+import { AiPage } from "@/pages/AiPage"
+import { McpRenderPage } from "@/pages/McpRenderPage"
 
 export default function App() {
   return (
@@ -30,6 +32,7 @@ function Routes() {
   // Public routes: no account needed.
   if (path === "/login") return <LoginPage />
   if (path === "/demo") return <BoardPage demo />
+  if (path === "/mcp-render") return <McpRenderPage />
   if (path === "/terms") return <LegalPage kind="terms" />
   if (path === "/privacy") return <LegalPage kind="privacy" />
   let m = match("/p/:token", path)
@@ -44,6 +47,7 @@ function Routes() {
 
   if (path === "/" || path === "") return <HomePage />
   if (path === "/settings") return <SettingsPage />
+  if (path === "/ai" || path === "/mcp-connect") return <AiPage />
   m = match("/b/:id", path)
   if (m) return <BoardPage key={m.id} spaceId={m.id} />
   return (
