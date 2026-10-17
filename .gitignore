@@ -1,18 +1,92 @@
-# Python
-__pycache__/
-*.pyc
-.venv/
-.pytest_cache/
+# ==========================================
+# Environment Variables & Secrets
+# ==========================================
+.env
+.env.*
+!.env.example
+!.env.production.example
+!.env.*.example
 
-# Node
+# Private keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ==========================================
+# Python
+# ==========================================
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+*.egg-info/
+
+# ==========================================
+# Node.js / Vite
+# ==========================================
 node_modules/
 dist/
+.vite/
 *.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# OS / editors
+# ==========================================
+# Testing & Coverage
+# ==========================================
+test-results/
+coverage/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+junit.xml
+
+# ==========================================
+# Local Development Data
+# ==========================================
+backend/data/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# ==========================================
+# AI Agent & Local Tooling Artifacts
+# ==========================================
+.agents/
+.audit/
+
+# ==========================================
+# Production Backups & Recovery
+# ==========================================
+*.dump
+zoomz-backup-*.tar
+zoomz-backup-*.tar.gz
+zoomz-backup-*.tgz
+
+# ==========================================
+# Logs & Temporary Files
+# ==========================================
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# ==========================================
+# OS & Editors
+# ==========================================
 .DS_Store
+Thumbs.db
 .vscode/
 .idea/
-
-# Local development data (SQLite database, uploaded files)
-backend/data/

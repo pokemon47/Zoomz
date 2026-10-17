@@ -144,7 +144,6 @@ def magic_link(body: MagicLinkIn, request: Request, db: Session = Depends(get_db
             expires_at=now() + timedelta(minutes=settings.magic_link_minutes),
         )
     )
-    db.commit()
     link = f"{settings.public_url}/api/auth/verify?token={token}"
     mail.send(
         email,
@@ -152,6 +151,7 @@ def magic_link(body: MagicLinkIn, request: Request, db: Session = Depends(get_db
         f"Here's your link to sign in to Zoomz. It works once and expires in {settings.magic_link_minutes} minutes.\n\nIf you didn't ask for it, you can ignore this email.",
         ("Sign in to Zoomz", link),
     )
+    db.commit()
     out: dict = {"sent": True}
     if settings.dev and not settings.smtp_host:
         out["devLink"] = link  # local development only: no mail server to deliver it
@@ -241,7 +241,7 @@ def google_callback(request: Request, code: str = "", state: str = "", db: Sessi
             info.raise_for_status()
             data = info.json()
     except (httpx.HTTPError, KeyError, ValueError):
-        log.exception("google sign-in failed")
+        log.warning("Google sign-in failed")
         return RedirectResponse("/login?error=google", status_code=303)
     if not data.get("email") or not data.get("email_verified"):
         return RedirectResponse("/login?error=google", status_code=303)

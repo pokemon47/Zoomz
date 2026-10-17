@@ -118,13 +118,13 @@ def add_ws_member(ws_id: str, body: WsMemberIn, request: Request, user: User = D
         wm.role = body.role
     else:
         db.add(WorkspaceMember(workspace_id=ws.id, user_id=target.id, role=body.role))
-    db.commit()
     mail.send(
         email,
         f"{user.name} added you to {ws.name} on Zoomz",
         f"{user.name} ({user.email}) added you to the workspace “{ws.name}”. Sign in with this email address to see its boards.",
         ("Open Zoomz", f"{settings.public_url}/login"),
     )
+    db.commit()
     return {"userId": target.id, "email": target.email, "name": target.name, "color": target.color, "role": body.role}
 
 
