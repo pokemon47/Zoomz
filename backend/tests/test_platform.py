@@ -51,10 +51,12 @@ def test_magic_link_is_single_use_and_requires_header(make_client):
     c = make_client()
     assert c.post("/api/auth/magic-link", json={"email": "x@example.com"}).status_code == 403  # no CSRF header
     link = c.post("/api/auth/magic-link", json={"email": "x@example.com"}, headers=H).json()["devLink"]
-    path = link.split("testserver")[1]
-    assert c.get(path, follow_redirects=False).headers["location"] == "/"
-    again = c.get(path, follow_redirects=False)
-    assert again.headers["location"].startswith("/login?error")
+    token = link.rsplit("/signin/", 1)[1]
+    # Opening the link (as a mail scanner would) never uses it up; old-style links just redirect.
+    assert c.get(f"/api/auth/verify?token={token}", follow_redirects=False).headers["location"] == f"/signin/{token}"
+    assert c.post("/api/auth/verify", json={"token": token}).status_code == 403  # no CSRF header
+    assert c.post("/api/auth/verify", json={"token": token}, headers=H).json() == {"next": "/"}
+    assert c.post("/api/auth/verify", json={"token": token}, headers=H).status_code == 410
 
 
 def test_logged_out_is_401(make_client):
@@ -358,9 +360,10 @@ def test_new_space_and_team_workspace(make_client):
     s = c.post("/api/spaces", json={"title": "Shoot"}, headers=H).json()
     assert s["title"] == "Shoot"
     ws = c.post("/api/workspaces", json={"name": "Studio"}, headers=H).json()
-    c.post(f"/api/workspaces/{ws['id']}/members", json={"email": "mate@example.com", "role": "editor"}, headers=H)
+    link = c.post(f"/api/workspaces/{ws['id']}/members", json={"email": "mate@example.com", "role": "editor"}, headers=H).json()["devLink"]
     s2 = c.post("/api/spaces", json={"title": "Team board", "workspaceId": ws["id"]}, headers=H).json()
-    mate = make_client("mate@example.com")
+    mate = make_client()
+    assert mate.post(f"/api/invites/{link.rsplit('/', 1)[1]}/redeem", json={}, headers=H).json() == {"workspaceId": ws["id"]}
     assert any(x["id"] == s2["id"] and x["role"] == "editor" for x in mate.get("/api/spaces").json()["shared"] + mate.get("/api/spaces").json()["mine"])
 
 
@@ -416,3 +419,196 @@ def test_folder_import_creates_nested_boards_in_one_batch(make_client):
     nodes = {n["id"]: n for n in scene(c, sid)["nodes"]}
     assert nodes[inner]["parentId"] == top and nodes[deeper]["parentId"] == inner
     assert any(n["parentId"] == deeper and n["type"] == "image" for n in nodes.values())
+
+
+# ---------------------------------------------------------------- one-click invites, guests, workspaces
+
+
+def _invite_token(c, sid, email, role="editor"):
+    r = c.post(f"/api/spaces/{sid}/invites", json={"email": email, "role": role}, headers=H)
+    assert r.status_code == 200, r.text
+    return r.json()["devLink"].rsplit("/", 1)[1]
+
+
+def test_invite_link_signs_in_a_new_person_once(make_client):
+    owner = make_client("inv-owner@example.com")
+    sid = first_space(owner)["id"]
+    token = _invite_token(owner, sid, "fresh@example.com")
+    visitor = make_client()
+    # Looking at the invite (or a mail scanner opening it) doesn't use it.
+    info = visitor.get(f"/api/invites/{token}").json()
+    assert info["email"] == "fresh@example.com" and info["kind"] == "space" and info["signedInAs"] is None
+    assert visitor.post(f"/api/invites/{token}/redeem", json={}).status_code == 403  # CSRF header required
+    r = visitor.post(f"/api/invites/{token}/redeem", json={}, headers=H)
+    assert r.status_code == 200 and r.json() == {"spaceId": sid}
+    assert visitor.get("/api/me").json()["email"] == "fresh@example.com"
+    assert scene(visitor, sid)["space"]["role"] == "editor"
+    # The link signs someone in only once.
+    stranger = make_client()
+    assert stranger.post(f"/api/invites/{token}/redeem", json={}, headers=H).status_code == 410
+    assert stranger.get("/api/me").status_code == 401
+    # The invited person clicking it again while signed in is fine.
+    assert visitor.post(f"/api/invites/{token}/redeem", json={}, headers=H).status_code == 200
+
+
+def test_invite_for_another_account_asks_first(make_client):
+    owner = make_client("mm-owner@example.com")
+    sid = first_space(owner)["id"]
+    token = _invite_token(owner, sid, "anna@example.com")
+    ben = make_client("ben@example.com")
+    r = ben.post(f"/api/invites/{token}/redeem", json={}, headers=H)
+    assert r.status_code == 409 and r.json()["detail"]["reason"] == "mismatch"
+    assert ben.get("/api/me").json()["email"] == "ben@example.com"  # nothing changed
+    assert ben.post(f"/api/invites/{token}/redeem", json={"switch": True}, headers=H).status_code == 200
+    assert ben.get("/api/me").json()["email"] == "anna@example.com"
+
+
+def test_guests_lose_access_after_guest_period_until_they_sign_in(make_client):
+    from datetime import timedelta
+
+    from app.db import SessionLocal
+    from app.models import User, now
+
+    owner = make_client("g-owner@example.com")
+    sid = first_space(owner)["id"]
+    guest = make_client()
+    guest.post(f"/api/invites/{_invite_token(owner, sid, 'guesty@example.com', 'viewer')}/redeem", json={}, headers=H)
+    assert scene(guest, sid)["space"]["role"] == "viewer"
+    with SessionLocal() as db:
+        u = db.query(User).filter_by(email="guesty@example.com").one()
+        assert u.guest_until is not None
+        u.guest_until = now() - timedelta(minutes=1)
+        db.commit()
+    r = guest.get("/api/me")
+    assert r.status_code == 401 and r.json()["detail"]["reason"] == "guest_expired"
+    assert guest.get(f"/api/spaces/{sid}/scene").status_code in (401, 404)
+    # Signing in normally makes them a full account again.
+    signed = make_client("guesty@example.com")
+    assert scene(signed, sid)["space"]["role"] == "viewer"
+    with SessionLocal() as db:
+        assert db.query(User).filter_by(email="guesty@example.com").one().guest_until is None
+
+
+def test_sessions_have_a_fixed_length_and_logout_revokes(make_client):
+    from app.db import SessionLocal
+    from app.models import User, UserSession
+
+    c = make_client("fixed@example.com")
+    with SessionLocal() as db:
+        uid_ = db.query(User).filter_by(email="fixed@example.com").one().id
+        sess = db.query(UserSession).filter_by(user_id=uid_).one()
+        days = (sess.expires_at - sess.created_at).days
+    assert 29 <= days <= 30
+    c.get("/api/me")
+    with SessionLocal() as db:  # using Zoomz doesn't extend it
+        assert (db.query(UserSession).filter_by(user_id=uid_).one().expires_at - sess.expires_at).total_seconds() == 0
+    assert c.post("/api/auth/logout", headers=H).status_code == 200
+    with SessionLocal() as db:
+        assert db.query(UserSession).filter_by(user_id=uid_).count() == 0
+
+
+def test_workspace_rename_and_delete(make_client):
+    c = make_client("ws-admin@example.com")
+    ws = c.post("/api/workspaces", json={"name": "Studio"}, headers=H).json()
+    sp = c.post("/api/spaces", json={"title": "Team board", "workspaceId": ws["id"]}, headers=H).json()
+    link = c.post(f"/api/workspaces/{ws['id']}/members", json={"email": "ws-editor@example.com", "role": "editor"}, headers=H).json()["devLink"]
+    editor = make_client()
+    editor.post(f"/api/invites/{link.rsplit('/', 1)[1]}/redeem", json={}, headers=H)
+    assert c.patch(f"/api/workspaces/{ws['id']}", json={"name": "   "}, headers=H).status_code == 422
+    assert editor.patch(f"/api/workspaces/{ws['id']}", json={"name": "Mine now"}, headers=H).status_code == 403
+    assert c.patch(f"/api/workspaces/{ws['id']}", json={"name": "Studio Two"}, headers=H).json()["name"] == "Studio Two"
+    assert editor.delete(f"/api/workspaces/{ws['id']}", headers=H).status_code == 403
+    personal = next(w for w in c.get("/api/spaces").json()["workspaces"] if w["personal"])
+    assert c.delete(f"/api/workspaces/{personal['id']}", headers=H).status_code == 409
+    assert c.delete(f"/api/workspaces/{ws['id']}", headers=H).status_code == 200
+    assert c.get(f"/api/spaces/{sp['id']}/scene").status_code == 404
+    assert all(w["id"] != ws["id"] for w in c.get("/api/spaces").json()["workspaces"])
+
+
+def test_export_board_as_zip_with_folders_and_manifest(make_client):
+    import json as _json
+
+    c = make_client("exporter@example.com")
+    sid = first_space(c)["id"]
+    root = scene(c, sid)["rootBoardId"]
+    trip, day, dup = uid("board"), uid("board"), uid("board")
+    frame = {"x": 0, "y": 0, "w": 1200, "h": 1000}
+    board = lambda id, parent, title: {"type": "create", "node": {"id": id, "type": "board", "parentId": parent, "x": 10, "y": 10, "w": 360, "h": 300, "content": {"title": title, "frame": frame}}}
+    assert op(c, sid, {"type": "batch", "ops": [board(trip, root, "Trip: 2026"), board(day, trip, "Day 1"), board(dup, trip, "Day 1")]}).status_code == 200
+    up = c.post(f"/api/spaces/{sid}/files", params={"board": day}, files={"file": ("sea.png", png_bytes(), "image/png")}, headers=H).json()
+    op(c, sid, {"type": "create", "node": {"id": uid("img"), "type": "image", "parentId": day, "x": 40, "y": 50, "w": 220, "h": 150, "content": {"title": "Sea", "fileId": up["id"]}}})
+    op(c, sid, {"type": "create", "node": {"id": uid("note"), "type": "note", "parentId": day, "x": 300, "y": 50, "w": 220, "h": 190, "content": {"title": "Plan", "body": "Swim"}}})
+    op(c, sid, {"type": "create", "node": {"id": uid("link"), "type": "link", "parentId": trip, "x": 0, "y": 600, "w": 300, "h": 200, "content": {"title": "Map", "url": "https://example.com/map"}}})
+
+    r = c.get(f"/api/spaces/{sid}/export", params={"board": trip})
+    assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+    names = set(z.namelist())
+    assert {"Trip_ 2026/zoomz-manifest.json", "Trip_ 2026/README.md", "Trip_ 2026/links.md", "Trip_ 2026/Day 1/sea.png", "Trip_ 2026/Day 1/Plan.md"} <= names
+    assert z.read("Trip_ 2026/Day 1/Plan.md").decode() == "# Plan\n\nSwim\n"
+    assert "https://example.com/map" in z.read("Trip_ 2026/links.md").decode()
+    m = _json.loads(z.read("Trip_ 2026/zoomz-manifest.json"))
+    assert m["zoomzExport"] == 1 and m["rootBoardId"] == trip
+    by_id = {n["id"]: n for n in m["nodes"]}
+    # Two boards with the same name get distinct folders; layout is kept.
+    assert {by_id[day]["path"], by_id[dup]["path"]} == {"Trip_ 2026/Day 1/", "Trip_ 2026/Day 1 (2)/"}
+    img = next(n for n in m["nodes"] if n["type"] == "image")
+    assert img["parentId"] == day and img["x"] == 40 and img["path"] == "Trip_ 2026/Day 1/sea.png"
+    # The starter board's built-in artwork comes along too.
+    full = zipfile.ZipFile(io.BytesIO(c.get(f"/api/spaces/{sid}/export").content))
+    assert any(n.endswith(".svg") for n in full.namelist())
+    # Strangers can't export.
+    assert make_client("nosy@example.com").get(f"/api/spaces/{sid}/export").status_code in (403, 404)
+
+
+def test_removing_a_workspace_member_revokes_access(make_client):
+    c = make_client("rm-owner@example.com")
+    ws = c.post("/api/workspaces", json={"name": "Crew"}, headers=H).json()
+    sp = c.post("/api/spaces", json={"title": "Crew board", "workspaceId": ws["id"]}, headers=H).json()
+    link = c.post(f"/api/workspaces/{ws['id']}/members", json={"email": "rm-mate@example.com", "role": "editor"}, headers=H).json()["devLink"]
+    mate = make_client()
+    mate.post(f"/api/invites/{link.rsplit('/', 1)[1]}/redeem", json={}, headers=H)
+    assert mate.get(f"/api/spaces/{sp['id']}/scene").status_code == 200
+    members = c.get(f"/api/workspaces/{ws['id']}/members").json()
+    mate_id = next(m["userId"] for m in members if m.get("email") == "rm-mate@example.com")
+    assert c.delete(f"/api/workspaces/{ws['id']}/members/{mate_id}", headers=H).status_code == 200
+    assert mate.get(f"/api/spaces/{sp['id']}/scene").status_code in (403, 404)
+
+
+def test_search_scopes(make_client):
+    c = make_client("scope@example.com")
+    sid = first_space(c)["id"]
+    root = scene(c, sid)["rootBoardId"]
+    a, b, inner = uid("board"), uid("board"), uid("board")
+    board = lambda id, parent, title: {"type": "create", "node": {"id": id, "type": "board", "parentId": parent, "x": 10, "y": 10, "w": 360, "h": 300, "content": {"title": title}}}
+    note = lambda parent, body: {"type": "create", "node": {"id": uid("note"), "type": "note", "parentId": parent, "x": 1, "y": 1, "w": 200, "h": 200, "content": {"title": "", "body": body}}}
+    op(c, sid, {"type": "batch", "ops": [board(a, root, "A"), board(b, root, "B"), board(inner, a, "Inner"), note(inner, "zebra deep in A"), note(b, "zebra in B")]})
+    other = c.post("/api/spaces", json={"title": "Other"}, headers=H).json()
+    op(c, other["id"], note(scene(c, other["id"])["rootBoardId"], "zebra elsewhere"))
+    team = c.post("/api/workspaces", json={"name": "T"}, headers=H).json()
+    ts = c.post("/api/spaces", json={"title": "Team", "workspaceId": team["id"]}, headers=H).json()
+    op(c, ts["id"], note(scene(c, ts["id"])["rootBoardId"], "zebra in team"))
+
+    def bodies(**params):
+        return sorted(h["node"]["content"]["body"] for h in c.get("/api/search", params={"q": "zebra", **params}).json())
+
+    assert bodies(scope="board", space=sid, board=a) == ["zebra deep in A"]
+    assert bodies(scope="board", space=sid, board=root) == ["zebra deep in A", "zebra in B"]
+    ws_id = scene(c, sid)["space"]["workspaceId"]
+    assert bodies(scope="workspace", workspace=ws_id) == ["zebra deep in A", "zebra elsewhere", "zebra in B"]
+    assert bodies(scope="workspace", workspace=team["id"]) == ["zebra in team"]
+    # Someone else's workspace stays invisible whatever the scope says.
+    assert make_client("scope-stranger@example.com").get("/api/search", params={"q": "zebra", "scope": "workspace", "workspace": ws_id}).json() == []
+
+
+def test_pasted_files_survive_losing_the_original(make_client):
+    c = make_client("paster@example.com")
+    team = c.post("/api/workspaces", json={"name": "Source"}, headers=H).json()
+    src = c.post("/api/spaces", json={"title": "Source board", "workspaceId": team["id"]}, headers=H).json()
+    dst = next(s["id"] for s in c.get("/api/spaces").json()["mine"] if s["workspaceId"] != team["id"])
+    f = c.post(f"/api/spaces/{src['id']}/files", files={"file": ("p.png", png_bytes(), "image/png")}, headers=H).json()
+    copied = c.post(f"/api/files/{f['id']}/copy?space={dst}", headers=H)
+    assert copied.status_code == 200 and copied.json()["id"] != f["id"]
+    # The original workspace goes away; the pasted copy keeps working.
+    assert c.delete(f"/api/workspaces/{team['id']}", headers=H).status_code == 200
+    assert c.get(copied.json()["src"]).status_code == 200

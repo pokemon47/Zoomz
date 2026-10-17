@@ -209,7 +209,7 @@ function LiveBoard({ store }: { store: SceneStore }) {
           Following {store.peers.get(follow)!.name} — scroll or drag to stop
         </div>
       )}
-      <SearchDialog open={searching} onClose={() => setSearching(false)} here={{ spaceId: store.spaceId, space: store.space, flyTo: (id) => controller.current?.flyToNode(id) }} />
+      <SearchDialog open={searching} onClose={() => setSearching(false)} here={{ spaceId: store.spaceId, space: store.space, workspaceId: store.workspaceId, boardId: () => controller.current?.currentBoard() ?? store.space.rootId, flyTo: (id) => controller.current?.flyToNode(id) }} />
       {store.spaceId && <ShareDialog spaceId={store.spaceId} title={store.title} space={store.space} open={sharing} onClose={() => setSharing(false)} />}
     </main>
   )

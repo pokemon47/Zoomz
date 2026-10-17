@@ -33,7 +33,7 @@ import { CameraEngine } from "@/lib/cameraEngine"
 import { copyNodes, lastClip, parseClip, pasteOps } from "@/lib/clipboard"
 import { MOTION, SPACE, ZOOM, cardBoxFactor, floorFor, perspectiveFor } from "@/lib/constants"
 import { IMPORT_GRID, IMPORT_LIMITS, countFiles, fileCard, planFolder, readDrop, type BoardPlan, type FolderTree } from "@/lib/folderImport"
-import { api } from "@/lib/http"
+import { api, apiUrl } from "@/lib/http"
 import { getCaptions, saveCaptions } from "@/lib/captions"
 import { pathTo, titleOf } from "@/lib/scene"
 import { SCENERY, themeById, type SceneryId } from "@/lib/scenery"
@@ -49,6 +49,8 @@ import { Scenery } from "./Scenery"
 export type CanvasController = {
   flyToNode(id: string): void
   flyToBoard(id: string): void
+  /** The board you're standing in right now. */
+  currentBoard(): string
 }
 
 type Props = {
@@ -336,8 +338,12 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
         }
       },
       flyToBoard,
+      currentBoard: () => focusRef.current,
     }
   }, [controller, flyToBoard, flyToNode, space])
+
+  const focusRef = useRef(lay.focus)
+  focusRef.current = lay.focus
 
   const goUp = useCallback(() => {
     const parent = space.parentOf(lay.focus)
@@ -620,10 +626,12 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       if (up) order.reverse()
       const label = { front: "bring to front", forward: "bring forward", backward: "send backward", back: "send to back" }[move]
       let moved = false
-      for (const n of order) {
-        const op = layerOps(space, n.id, move)
-        if (op && store.commit(op, label)) moved = true
-      }
+      store.group(label, () => {
+        for (const n of order) {
+          const op = layerOps(space, n.id, move)
+          if (op && store.commit(op, label)) moved = true
+        }
+      })
       if (moved) setAnnouncement(`${label[0].toUpperCase()}${label.slice(1)}`)
     },
     [space, store],
@@ -652,9 +660,11 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       const targets = selection.includes(id) ? selection : [id]
       if (a.kind === "edit") startEdit(n)
       else if (a.kind === "delete") deleteIds(targets)
-      else moveLayer(targets, a.move)
+      else if (a.kind === "export") {
+        if (store.spaceId) window.location.assign(apiUrl(`/api/spaces/${store.spaceId}/export?board=${encodeURIComponent(id)}`))
+      } else moveLayer(targets, a.move)
     },
-    [deleteIds, moveLayer, selection, space, startEdit],
+    [deleteIds, moveLayer, selection, space, startEdit, store],
   )
 
   /** Screen rect of a card on the board right now (for the lightbox to fly from and back to). */
@@ -1248,6 +1258,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
           title={selection.length > 1 && selection.includes(menu.id) ? `${selection.length} items` : titleOf(space.node(menu.id)!)}
           canEdit={store.canEdit(space.node(menu.id)!.parentId ?? menu.id)}
           layerable={layerable(menu.id)}
+          exportable={!!store.spaceId && !store.publicToken && space.node(menu.id)!.type === "board" && !(selection.length > 1 && selection.includes(menu.id))}
           onAction={(a) => onMenuAction(menu.id, a)}
           onClose={() => setMenu(null)}
         />

@@ -24,7 +24,19 @@ router = APIRouter(prefix="/api", tags=["discover"])
 
 
 @router.get("/search")
-def search(q: str, request: Request, space: Optional[str] = None, user: User = Depends(require_user), db: Session = Depends(get_db)) -> list:
+def search(
+    q: str,
+    request: Request,
+    space: Optional[str] = None,
+    scope: Optional[str] = None,
+    board: Optional[str] = None,
+    workspace: Optional[str] = None,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+) -> list:
+    """Search what you can see. `scope=board` (with `space` and `board`): that board and
+    everything nested in it. `scope=workspace` (with `workspace`): every board you can see in
+    that workspace. No scope: everything you can see."""
     q = q.strip().lower()
     if len(q) < 2:
         return []
@@ -32,12 +44,16 @@ def search(q: str, request: Request, space: Optional[str] = None, user: User = D
     ws_ids = select(WorkspaceMember.workspace_id).where(WorkspaceMember.user_id == user.id)
     sp_ids = select(SpaceMember.space_id).where(SpaceMember.user_id == user.id)
     spaces = {s.id: s for s in db.scalars(select(Space).where(or_(Space.workspace_id.in_(ws_ids), Space.id.in_(sp_ids))))}
-    if space:
+    if scope == "workspace" and workspace:
+        spaces = {k: v for k, v in spaces.items() if v.workspace_id == workspace}
+    if space or scope == "board":
         spaces = {k: v for k, v in spaces.items() if k == space}
     if not spaces:
         return []
     terms = [t for t in re.split(r"\s+", q) if t][:5]
     stmt = select(Node).where(Node.space_id.in_(list(spaces)))
+    if scope == "board" and board:
+        stmt = stmt.where(Node.id.in_(_descendants(db, next(iter(spaces)), board)))
     for t in terms:
         stmt = stmt.where(Node.search_text.contains(t))
     rows = list(db.scalars(stmt.limit(40)))
@@ -53,6 +69,22 @@ def search(q: str, request: Request, space: Optional[str] = None, user: User = D
             path.insert(0, {"id": b.id, "title": (b.content or {}).get("title", "")})
             cur = b.parent_id
         out.append({"spaceId": n.space_id, "spaceTitle": spaces[n.space_id].title, "node": node_out(n, files), "path": path})
+    return out
+
+
+def _descendants(db: Session, space_id: str, board_id: str) -> set[str]:
+    """Every node nested under a board (not the board itself)."""
+    kids: dict[str, list[str]] = {}
+    for nid, parent in db.execute(select(Node.id, Node.parent_id).where(Node.space_id == space_id)):
+        if parent:
+            kids.setdefault(parent, []).append(nid)
+    out: set[str] = set()
+    stack = [board_id]
+    while stack:
+        for k in kids.get(stack.pop(), []):
+            if k not in out:
+                out.add(k)
+                stack.append(k)
     return out
 
 

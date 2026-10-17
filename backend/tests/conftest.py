@@ -22,9 +22,9 @@ def sign_in(client: TestClient, email: str) -> dict:
     r = client.post("/api/auth/magic-link", json={"email": email}, headers=H)
     assert r.status_code == 200, r.text
     link = r.json()["devLink"]
-    token = link.split("token=")[1]
-    r = client.get(f"/api/auth/verify?token={token}", follow_redirects=False)
-    assert r.status_code == 303
+    token = link.rsplit("/", 1)[1]
+    r = client.post("/api/auth/verify", json={"token": token}, headers=H)
+    assert r.status_code == 200, r.text
     me = client.get("/api/me")
     assert me.status_code == 200
     return me.json()

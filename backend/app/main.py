@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import delete, select, text
 
-from . import account, auth, discover, files, live, spaces, mail
+from . import account, auth, discover, export, files, live, spaces, mail
 from .config import settings
 from .db import SessionLocal, engine
 
@@ -164,7 +164,7 @@ def client_error(body: ClientError, request: Request) -> dict:
     return {"ok": True}
 
 
-for r in (auth.router, account.router, spaces.router, files.router, discover.router, live.router):
+for r in (auth.router, account.router, spaces.router, files.router, discover.router, export.router, live.router):
     app.include_router(r)
 
 app.mount("/api/assets", StaticFiles(directory=STATIC_DIR), name="assets")

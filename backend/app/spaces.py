@@ -5,14 +5,14 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from . import mail
 from . import ops as ops_mod
-from .auth import EMAIL_RE, current_user_optional, require_user
+from .auth import EMAIL_RE, current_user_optional, end_session, get_or_create_user, require_user, start_session
 from .config import settings
 from .db import get_db
 from .live import hub
@@ -212,7 +212,7 @@ def invite(space_id: str, body: InviteIn, request: Request, user: User = Depends
         raise HTTPException(422, "Invite people as an editor or a viewer.")
     limit(request, "invite", 30, 15, key=user.id)
     token = new_token()
-    inv = Invite(space_id=space.id, email=email, role=body.role, token_hash=hash_token(token), invited_by=user.id, expires_at=now() + timedelta(days=14))
+    inv = Invite(space_id=space.id, email=email, role=body.role, token_hash=hash_token(token), invited_by=user.id, expires_at=now() + timedelta(days=settings.invite_days))
     db.add(inv)
     link = f"{settings.public_url}/invite/{token}"
     mail.send(
@@ -359,22 +359,71 @@ def _invite(db: Session, token: str) -> Invite:
 
 
 @router.get("/invites/{token}")
-def invite_info(token: str, db: Session = Depends(get_db)) -> dict:
+def invite_info(token: str, user: Optional[User] = Depends(current_user_optional), db: Session = Depends(get_db)) -> dict:
+    """What an invite is for. Reading it never uses it up (mail scanners open links too)."""
     inv = _invite(db, token)
-    space = db.get(Space, inv.space_id)
     by = db.get(User, inv.invited_by) if inv.invited_by else None
-    return {"spaceId": space.id, "title": space.title, "role": inv.role, "email": inv.email, "invitedBy": by.name if by else None, "accepted": bool(inv.accepted_at)}
+    out = {"role": inv.role, "email": inv.email, "invitedBy": by.name if by else None, "accepted": bool(inv.accepted_at)}
+    if inv.workspace_id:
+        ws = db.get(Workspace, inv.workspace_id)
+        out |= {"kind": "workspace", "workspaceId": ws.id, "title": ws.name}
+    else:
+        space = db.get(Space, inv.space_id)
+        out |= {"kind": "space", "spaceId": space.id, "title": space.title}
+    out["signedInAs"] = user.email if user else None
+    return out
+
+
+class RedeemIn(BaseModel):
+    #: Signed in as someone else: sign them out and continue as the invited person.
+    switch: bool = False
+
+
+@router.post("/invites/{token}/redeem")
+def redeem_invite(
+    token: str, request: Request, response: Response, body: RedeemIn = RedeemIn(), user: Optional[User] = Depends(current_user_optional), db: Session = Depends(get_db)
+) -> dict:
+    """One click from the invite email: accepts the invite and signs the invited person in,
+    creating a guest account if they're new. The token works once."""
+    inv = _invite(db, token)
+    limit(request, "redeem", 30, 15)
+    if user and user.email != inv.email:
+        if not body.switch:
+            raise HTTPException(409, {"message": f"This invite is for {inv.email}, but you're signed in as {user.email}.", "reason": "mismatch", "email": inv.email})
+        end_session(db, request, response)
+        user = None
+    if inv.accepted_at and not user:
+        raise HTTPException(410, "This invite was already used. Sign in with your email to open it.")
+    target, _ = get_or_create_user(db, inv.email, guest=True)
+    if inv.workspace_id:
+        _grant_workspace(db, inv.workspace_id, target.id, inv.role)
+        out = {"workspaceId": inv.workspace_id}
+    else:
+        _grant(db, inv.space_id, target.id, inv.role)
+        out = {"spaceId": inv.space_id}
+    inv.accepted_at = inv.accepted_at or now()
+    if not user:
+        start_session(db, response, target, request)
+    db.commit()
+    return out
 
 
 @router.post("/invites/{token}/accept")
-def accept_invite(token: str, user: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+def accept_invite(token: str, request: Request, response: Response, user: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    """Older clients: accepting while signed in as the invited person."""
     inv = _invite(db, token)
     if inv.email != user.email:
         raise HTTPException(403, f"This invite is for {inv.email}. Sign in with that address to accept it.")
-    _grant(db, inv.space_id, user.id, inv.role)
-    inv.accepted_at = inv.accepted_at or now()
-    db.commit()
-    return {"spaceId": inv.space_id}
+    return redeem_invite(token, request, response, RedeemIn(), user, db)
+
+
+def _grant_workspace(db: Session, workspace_id: str, user_id: str, role: str) -> None:
+    wm = db.get(WorkspaceMember, (workspace_id, user_id))
+    if wm:
+        if RANK[role] > RANK[wm.role]:
+            wm.role = role
+    else:
+        db.add(WorkspaceMember(workspace_id=workspace_id, user_id=user_id, role=role))
 
 
 def _grant(db: Session, space_id: str, user_id: str, role: str) -> None:

@@ -37,6 +37,9 @@ class User(Base):
     color: Mapped[str] = mapped_column(String(16), default="#6E8BFF")
     avatar_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    #: Set for guests: people who only ever came in through an emailed invite. They keep their
+    #: invited access until then; signing in normally (magic link or Google) clears it.
+    guest_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class LoginToken(Base):
@@ -135,9 +138,12 @@ class BoardOverride(Base):
 
 
 class Invite(Base):
+    """An emailed invite to one space or to a whole workspace (exactly one of the two is set)."""
+
     __tablename__ = "invites"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
-    space_id: Mapped[str] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"), index=True)
+    space_id: Mapped[Optional[str]] = mapped_column(ForeignKey("spaces.id", ondelete="CASCADE"), index=True, nullable=True)
+    workspace_id: Mapped[Optional[str]] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), index=True, nullable=True)
     email: Mapped[str] = mapped_column(String(320))
     role: Mapped[str] = mapped_column(String(10))
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)

@@ -43,13 +43,23 @@ def current_user_optional(request: Request, db: Session = Depends(get_db)) -> Op
     sess = db.scalar(select(UserSession).where(UserSession.token_hash == hash_token(token)))
     if not sess or _aware(sess.expires_at) < now():
         return None
+    if guest_expired(sess.user):
+        request.state.guest_expired = sess.user.email
+        return None
     return sess.user
 
 
-def require_user(user: Optional[User] = Depends(current_user_optional)) -> User:
+def require_user(request: Request, user: Optional[User] = Depends(current_user_optional)) -> User:
     if not user:
+        email = getattr(request.state, "guest_expired", None)
+        if email:
+            raise HTTPException(401, {"message": "Your guest access has ended. Sign in to keep using Zoomz.", "reason": "guest_expired", "email": email})
         raise HTTPException(401, "Sign in to continue.")
     return user
+
+
+def guest_expired(user: User) -> bool:
+    return bool(user.guest_until) and _aware(user.guest_until) <= now()
 
 
 def _aware(dt):
@@ -62,7 +72,9 @@ def _aware(dt):
 # ---------------------------------------------------------------- accounts
 
 
-def get_or_create_user(db: Session, email: str, name: str = "", avatar_url: Optional[str] = None) -> tuple[User, bool]:
+def get_or_create_user(db: Session, email: str, name: str = "", avatar_url: Optional[str] = None, guest: bool = False) -> tuple[User, bool]:
+    """Find or create the account for an email. `guest` marks a new account made by redeeming
+    an emailed invite: it works for `GUEST_DAYS`, then its owner must sign in normally."""
     email = email.strip().lower()
     user = db.scalar(select(User).where(User.email == email))
     if user:
@@ -74,6 +86,7 @@ def get_or_create_user(db: Session, email: str, name: str = "", avatar_url: Opti
         name=(name or email.split("@")[0].replace(".", " ").title())[:80],
         color=random.choice(COLORS),
         avatar_url=avatar_url,
+        guest_until=now() + timedelta(days=settings.guest_days) if guest else None,
     )
     db.add(user)
     db.flush()
@@ -88,19 +101,24 @@ def get_or_create_user(db: Session, email: str, name: str = "", avatar_url: Opti
 
 
 def start_session(db: Session, response: Response, user: User, request: Request) -> None:
+    """A fixed-length session: using Zoomz doesn't extend it. Guests' sessions end with their
+    guest period; everyone else's after `SESSION_DAYS`."""
     token = new_token()
+    expires = now() + timedelta(days=settings.session_days)
+    if user.guest_until:
+        expires = min(expires, _aware(user.guest_until))
     db.add(
         UserSession(
             user_id=user.id,
             token_hash=hash_token(token),
-            expires_at=now() + timedelta(days=settings.session_days),
+            expires_at=expires,
             user_agent=(request.headers.get("user-agent") or "")[:300],
         )
     )
     response.set_cookie(
         COOKIE,
         token,
-        max_age=settings.session_days * 86400,
+        max_age=max(60, int((expires - now()).total_seconds())),
         httponly=True,
         secure=settings.secure_cookies,
         samesite="lax",
@@ -144,7 +162,9 @@ def magic_link(body: MagicLinkIn, request: Request, db: Session = Depends(get_db
             expires_at=now() + timedelta(minutes=settings.magic_link_minutes),
         )
     )
-    link = f"{settings.public_url}/api/auth/verify?token={token}"
+    # The link opens a page with a button; only that button's POST uses the token, so mail
+    # scanners that open links don't burn it.
+    link = f"{settings.public_url}/signin/{token}"
     mail.send(
         email,
         "Your Zoomz sign-in link",
@@ -159,28 +179,43 @@ def magic_link(body: MagicLinkIn, request: Request, db: Session = Depends(get_db
 
 
 @router.get("/verify")
-def verify(token: str, request: Request, db: Session = Depends(get_db)):
-    row = db.scalar(select(LoginToken).where(LoginToken.token_hash == hash_token(token)))
+def verify_link(token: str):
+    """Links from older emails: show the confirm page rather than signing in on a GET."""
+    return RedirectResponse(f"/signin/{token}", status_code=303)
+
+
+class VerifyIn(BaseModel):
+    token: str
+
+
+@router.post("/verify")
+def verify(body: VerifyIn, request: Request, response: Response, db: Session = Depends(get_db)) -> dict:
+    row = db.scalar(select(LoginToken).where(LoginToken.token_hash == hash_token(body.token)))
     if not row or row.used_at or _aware(row.expires_at) < now():
-        return RedirectResponse("/login?error=expired", status_code=303)
+        raise HTTPException(410, "That sign-in link has expired or was already used. Ask for a new one.")
     row.used_at = now()
     user, _ = get_or_create_user(db, row.email)
-    resp = RedirectResponse(row.next_path or "/", status_code=303)
-    start_session(db, resp, user, request)
+    user.guest_until = None  # signing in normally makes a guest a full account
+    start_session(db, response, user, request)
     db.commit()
-    return resp
+    return {"next": row.next_path or "/"}
 
 
 @router.post("/logout")
 def logout(request: Request, response: Response, db: Session = Depends(get_db)) -> dict:
+    end_session(db, request, response)
+    db.commit()
+    return {"ok": True}
+
+
+def end_session(db: Session, request: Request, response: Response) -> None:
+    """Revoke this browser's session on the server and clear its cookie (caller commits)."""
     token = request.cookies.get(COOKIE)
     if token:
         sess = db.scalar(select(UserSession).where(UserSession.token_hash == hash_token(token)))
         if sess:
             db.delete(sess)
-            db.commit()
     response.delete_cookie(COOKIE, path="/")
-    return {"ok": True}
 
 
 # ---------------------------------------------------------------- Google
@@ -246,6 +281,7 @@ def google_callback(request: Request, code: str = "", state: str = "", db: Sessi
     if not data.get("email") or not data.get("email_verified"):
         return RedirectResponse("/login?error=google", status_code=303)
     user, _ = get_or_create_user(db, data["email"], data.get("name") or "", data.get("picture"))
+    user.guest_until = None
     resp = RedirectResponse(safe_next(request.cookies.get("zb_oauth_next")), status_code=303)
     for k in ("zb_oauth_state", "zb_oauth_verifier", "zb_oauth_next"):
         resp.delete_cookie(k, path="/api/auth")

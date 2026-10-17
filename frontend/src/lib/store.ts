@@ -75,6 +75,8 @@ export class SceneStore {
   spaceId: string | null
   publicToken: string | null
   title: string
+  /** The workspace this board lives in ("" for the local demo). */
+  workspaceId = ""
   scenery: string
   role: Role
   boardRoles: Record<string, Role>
@@ -102,6 +104,7 @@ export class SceneStore {
     this.spaceId = this.local ? null : snapshot.space.id
     this.publicToken = opts.publicToken ?? null
     this.title = snapshot.space.title
+    this.workspaceId = snapshot.space.workspaceId
     this.scenery = snapshot.space.scenery
     this.role = snapshot.space.role
     this.boardRoles = snapshot.boardRoles
@@ -152,26 +155,64 @@ export class SceneStore {
     return true
   }
 
+  /** Run several commits as one undo step (e.g. re-stacking a whole selection). */
+  group(label: string, fn: () => void) {
+    const start = this.undoStack.length
+    fn()
+    const added = this.undoStack.splice(start)
+    if (added.length) this.undoStack.push({ op: { type: "batch", ops: added.map((e) => e.op).reverse() }, label })
+  }
+
+  /**
+   * Undo your own last change. Like Google Docs and Canva, it only puts back the fields you
+   * changed, so other people's later edits to the same card stay; anything a collaborator has
+   * since deleted is skipped quietly, and an entry with nothing left to undo is passed over.
+   */
   undo(): string | null {
-    const entry = this.undoStack.pop()
-    if (!entry) return null
-    const inverse = this.inverseOf(entry.op)
-    this.applyLocal(entry.op)
-    this.redoStack.push({ op: inverse, label: entry.label })
-    this.send(entry.op)
-    this.emit()
-    return entry.label
+    return this.step(this.undoStack, this.redoStack)
   }
 
   redo(): string | null {
-    const entry = this.redoStack.pop()
-    if (!entry) return null
-    const inverse = this.inverseOf(entry.op)
-    this.applyLocal(entry.op)
-    this.undoStack.push({ op: inverse, label: entry.label })
-    this.send(entry.op)
-    this.emit()
-    return entry.label
+    return this.step(this.redoStack, this.undoStack)
+  }
+
+  private step(from: { op: Op; label: string }[], to: { op: Op; label: string }[]): string | null {
+    for (let entry = from.pop(); entry; entry = from.pop()) {
+      const op = this.stillApplicable(entry.op)
+      if (!op) continue
+      const inverse = this.inverseOf(op)
+      this.applyLocal(op)
+      to.push({ op: inverse, label: entry.label })
+      this.send(op)
+      this.emit()
+      return entry.label
+    }
+    return null
+  }
+
+  /** The part of an operation that still makes sense now: edits to cards someone else deleted
+   *  (or new cards whose board is gone) are dropped. Null when nothing is left. */
+  stillApplicable(op: Op, made = new Set<string>()): Op | null {
+    const exists = (id: string | null | undefined) => !!id && (made.has(id) || !!this.space.node(id))
+    switch (op.type) {
+      case "batch": {
+        const ops = op.ops.map((o) => this.stillApplicable(o, made)).filter((o): o is Op => !!o)
+        return ops.length ? { type: "batch", ops } : null
+      }
+      case "create":
+        if (this.space.node(op.node.id) || !exists(op.node.parentId)) return null
+        made.add(op.node.id)
+        return op
+      case "delete":
+        return exists(op.id) ? op : null
+      case "update":
+        if (!exists(op.id)) return null
+        if (op.patch.parentId && !exists(op.patch.parentId)) {
+          const { parentId: _gone, x: _x, y: _y, ...rest } = op.patch
+          return Object.keys(rest).length ? { ...op, patch: rest } : null
+        }
+        return op
+    }
   }
 
   private allowed(op: Op): boolean {

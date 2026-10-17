@@ -110,10 +110,10 @@ def test_magic_and_invitation_use_smtp(make_client, smtp, monkeypatch):
     response = owner.post("/api/auth/magic-link", json={"email": "new@example.com"}, headers={"X-Zoomz": "1"})
     assert response.status_code == 200 and response.json() == {"sent": True}
     body = smtp.send_message.call_args.args[0].get_body(preferencelist=("plain",)).get_content()
-    assert "https://zoomz.example/api/auth/verify?token=" in body
-    token = body.split("token=")[1].strip()
+    assert "https://zoomz.example/signin/" in body
+    token = body.split("/signin/")[1].split()[0].strip()
     visitor = make_client()
-    verified = visitor.get(f"/api/auth/verify?token={token}", follow_redirects=False)
+    verified = visitor.post("/api/auth/verify", json={"token": token}, headers={"X-Zoomz": "1"})
     assert "Secure" in verified.headers["set-cookie"] and "HttpOnly" in verified.headers["set-cookie"]
     assert "SameSite=lax" in verified.headers["set-cookie"]
     sid = owner.get("/api/spaces").json()["mine"][0]["id"]

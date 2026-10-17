@@ -27,6 +27,7 @@ from . import ops as ops_mod
 from .auth import COOKIE, _aware
 from .config import settings
 from .db import SessionLocal
+from .auth import guest_expired
 from .models import Space, User, UserSession, now
 from .permissions import space_role
 from .security import hash_token
@@ -120,7 +121,7 @@ def _connect(space_id: str, token: Optional[str], public: Optional[str]) -> tupl
         user = None
         if token:
             sess = db.scalar(select(UserSession).where(UserSession.token_hash == hash_token(token)))
-            if sess and _aware(sess.expires_at) >= now():
+            if sess and _aware(sess.expires_at) >= now() and not guest_expired(sess.user):
                 user = sess.user
                 db.expunge(user)
         role = space_role(db, space, user)

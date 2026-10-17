@@ -81,18 +81,23 @@ GitHub Actions runs SQLite tests, PostgreSQL migrations and tests, frontend chec
 | Resize | Select one card and drag the blue corner grip (pictures always keep their true shape) |
 | Select several | Shift-click, or Shift-drag on the floor for a marquee; ⌘A selects everything on this board |
 | Copy / cut / paste / duplicate | ⌘C / ⌘X / ⌘V / ⌘D. This works across boards and spaces; files are copied along |
-| Delete | Delete or Backspace |
+| Delete | Delete or Backspace (undo brings it back, with everything inside a board) |
 | Undo / redo your own changes | ⌘Z / ⇧⌘Z |
 
 **Working together.** Everyone on a board appears as an avatar in the top bar, with a live, named cursor. Click someone's avatar to follow their view; scroll or drag to stop. Cards other people are dragging move live. Being offline is fine: your edits queue and send when you reconnect, and the status pill shows anything unsaved.
 
 **Sharing** (owners, via **Share**):
 
-- **Invite by email** as an editor or viewer. The invite only works for that email address.
+- **Invite by email** as an editor or viewer. One click on the emailed link opens the board and signs the person in, with no second email. Someone new becomes a **guest**: they keep their invited access for 14 days (`GUEST_DAYS`), then sign in normally to keep going. The link works once, only for that email address, and opening it (as mail scanners do) doesn't use it up. If someone else is signed in on that browser, Zoomz asks which account to use.
+- **Workspace invites** work the same way and give access to every board in the workspace. Owners can remove anyone's access from the share dialog or the workspace's Members; they're disconnected at once.
 - **Join link:** anyone with it who signs in gets the access you pick. It can expire after 1, 7 or 30 days, and you can turn it off at any time.
 - **Public link:** view-only, no account needed.
 - **Per-board access:** give a member a different role inside one board and everything in it. For example, someone can edit the whole space but only view the "Final picks" board.
 - **Team workspaces:** members see every board in the workspace with their workspace role. A person's role is the higher of their workspace role and their board-space role.
+
+**Managing boards and workspaces.** Each board on the dashboard has a ⋯ menu: **Export as zip** and, for owners, **Delete** (asks first, then deletes permanently). The workspace ⋯ menu renames it or deletes it with everything in it (type its name to confirm). Your Personal workspace can be renamed but not deleted.
+
+**Exporting.** A board (from the dashboard, or right-click any board inside one) downloads as a zip: a folder per board, pictures and files under their own names, notes as Markdown, links in `links.md`, and `zoomz-manifest.json` with the exact layout (positions, sizes, stacking, nesting) for rebuilding it.
 
 **Your account** (Settings): change your name and cursor colour, choose **Light**, **Dark** or **System** appearance (remembered per browser, applied before the page paints), download all your data as a zip, or delete your account along with everything in the workspaces you created.
 
@@ -116,6 +121,7 @@ For the standard Docker Compose deployment, copy `.env.production.example` to `.
 | `MAX_UPLOAD_MB`, `UPLOAD_BODY_LIMIT` | Backend file limit and nginx body limit. Defaults 200 and `201m`; allow multipart overhead when changing them. |
 | `SPACE_QUOTA_MB` | Default 5120. Monitor available volume capacity separately. |
 | `TRUSTED_PROXY_CIDR` | Exact ingress network confirmed by the host. Default only trusts loopback. Never use `0.0.0.0/0`. Correct configuration is needed for per-client IP rate limits. |
+| `SESSION_DAYS`, `GUEST_DAYS`, `INVITE_DAYS` | How long a sign-in lasts (30), how long invite-only guests can use Zoomz before signing in (14), and how long an invite link is valid (14). Sessions have a fixed length: using Zoomz doesn't extend them. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional. Register `PUBLIC_URL/api/auth/google/callback` with Google. |
 
 Legacy development `SMTP_TLS` remains supported, but production requires explicit `SMTP_ENCRYPTION`. Missing or malformed production SMTP, URL, database, secret, and storage settings fail startup without exposing their values.
@@ -228,18 +234,19 @@ Run the acceptance checks before switching traffic. Keep the original project in
 
 - **One path for every edit.** Each change is an operation (`create` / `update` / `delete` / `batch`). The scene store (`frontend/src/lib/store.ts`) applies it locally at once, records its inverse for your undo, and sends it over the board's WebSocket. The server (`backend/app/ops.py`) checks permissions and invariants (no board inside itself, the top board is protected, content fields are whitelisted and length-limited, coordinates are clamped). It writes the change, gives it the next sequence number, logs it and broadcasts the result.
 - **Conflicts** resolve by the server's order: the last write to a field wins, and every client converges because results apply in sequence. While one of your own edits to a card is in flight, other people's updates to that card wait behind it. A rejected edit, or a gap in the log after a long disconnect, triggers a fresh snapshot, and anything you hadn't sent yet is re-applied on top.
+- **Undo with collaborators** works like Google Docs or Canva: you only undo your own changes, and only the fields you changed, so a teammate's later edit to the same card stays. Parts of an undo that touch cards someone else has since deleted are skipped quietly. One action is one step: a drag, a resize, a paste of many cards or re-stacking a selection all undo at once.
 - **Presence and drag previews** (`backend/app/live.py`) are relayed but never stored. Removing someone's access closes their socket immediately.
 
 **Accounts, permissions, files** (backend)
 
-- **Sign-in** by one-time email link (20 minutes, single use) or Google (OAuth with PKCE). Sessions are httpOnly, SameSite=Lax cookies stored hashed; so are magic-link and invite tokens. Every state-changing request must carry an `X-Zoomz` header (CSRF), and WebSockets check their Origin. Sign-in, invites, uploads, search and link previews are rate-limited.
+- **Sign-in** by one-time email link (20 minutes, single use; the link opens a page and only its button signs in, so mail scanners can't use it up) or Google (OAuth with PKCE). Sessions last a fixed `SESSION_DAYS`; logging out revokes the session on the server. Sessions are httpOnly, SameSite=Lax cookies stored hashed; so are magic-link and invite tokens. Every state-changing request must carry an `X-Zoomz` header (CSRF), and WebSockets check their Origin. Sign-in, invites, uploads, search and link previews are rate-limited.
 - **Roles** (`backend/app/permissions.py`): owner > editor > viewer. Your space role is the higher of your workspace and space roles. A board override replaces it for one board and everything below it, and owners are never overridden. The snapshot tells the client your role in every board, so view-only boards don't offer edits.
 - **Files** (`backend/app/files.py`, `media.py`, `storage.py`):
   - Type is decided from the file's bytes, not its name. Programs and installers are refused, and SVGs are rebuilt without scripts, event handlers or external references.
   - Size limits and per-board quotas apply, with optional ClamAV scanning.
   - Images get 256 px and 1024 px WebP thumbnails, and cards load the smallest one that's sharp at their on-screen size. PDFs get a first-page preview. Videos get a poster frame, plus an H.264 transcode if the browser can't play the original; this runs in the background and the card updates live.
   - File URLs are signed and expire, and they're served with a sandboxed CSP and `nosniff`, so a file can never run as part of the app. Unreferenced files are cleaned up after 30 days.
-- **Search** covers every board you can access (titles, notes, descriptions, file names, link titles), and results fly you to the item.
+- **Search** (⌘K) looks in the board you're in and everything inside it by default, or the whole workspace; on the dashboard, the workspace you're viewing. It covers titles, notes, descriptions, file names and link titles, respects every permission, and results fly you to the item.
 - **Link previews** use oEmbed for YouTube and Vimeo, and page metadata otherwise. The server refuses private, loopback and link-local addresses on every redirect hop.
 - **Your data:** `/api/me/export` returns a zip of your profile and the boards you own, with their files. Deleting your account cascades through your workspaces, boards and files.
 - **Errors** in the browser are reported to `/api/client-errors` and logged (and sent to Sentry when `SENTRY_DSN` is set).
