@@ -117,6 +117,8 @@ class Node(Base):
     w: Mapped[float] = mapped_column(Float, default=200)
     h: Mapped[float] = mapped_column(Float, default=200)
     content: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    #: Stacking order among siblings (higher paints on top). Null = default order by type.
+    rank: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     #: Lowercased searchable text (titles, bodies, file names, link titles).
     search_text: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

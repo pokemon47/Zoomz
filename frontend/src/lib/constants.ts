@@ -19,6 +19,8 @@ export const SPACE = {
   focusSpan: 0.42,
   /** Board faces let this much scenery through (frosted acrylic); 1 = opaque. */
   faceAlpha: 0.84,
+  /** Frosted floors drawn when deep inside boards (0.16³ ≈ 0.4% shows through a fourth). */
+  maxFloorLayers: 3,
   /** Card face layout (local units): padding and title header above the content window. */
   facePad: 14,
   faceHeader: 44,
@@ -26,8 +28,8 @@ export const SPACE = {
   contentPad: 40,
   /** Off-screen margin before culling, px. */
   cullMargin: 160,
-  /** Root frame can zoom out to this fraction of its fit. */
-  minZoomOfFit: 0.35,
+  /** Root frame can zoom out to this fraction of its fit (far enough to see it as a speck). */
+  minZoomOfFit: 0.05,
   /** No frame zooms past this (into an image). Boards re-anchor long before. */
   maxLocalScale: 14,
   /** Screen padding when fitting a board. */
@@ -82,6 +84,27 @@ export const TILT = {
   drag: { rotateX: 10, rotateZ: 2, scale: 1.03, y: -10 },
   press: { y: 3 },
 } as const
+
+/** Longest side of a card's own layout box; bigger cards are laid out at this and scaled up. */
+export const CARD_BOX = 1024
+
+/**
+ * How much a card is shrunk for layout (≥ 1). Boards are exempt: they're never tilted or
+ * promoted to their own GPU layer, and their faces carry the board's frame.
+ */
+export function cardBoxFactor(n: { type: string; w: number; h: number }): number {
+  if (n.type === "board") return 1
+  return Math.max(1, Math.max(n.w, n.h) / CARD_BOX)
+}
+
+/**
+ * Perspective for a card's tilt, in its own units. Scaling it with the card keeps the tilt
+ * looking the same at any size (a 220×290 card at 900px) — and, crucially, keeps a card that
+ * was resized huge from swinging its corners past the eye point, which can't be projected.
+ */
+export function perspectiveFor(w: number, h: number): number {
+  return Math.max(900, Math.max(w, h) * 3.1)
+}
 
 /** Board stack fan-out per layer, rest vs. hover (design system: 4px/12px spread). */
 export const STACK = {

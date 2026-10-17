@@ -20,7 +20,7 @@ export type Op =
   | { type: "delete"; id: string }
   | { type: "batch"; ops: Op[] }
 
-export type Patch = Partial<Pick<SceneNode, "x" | "y" | "z" | "w" | "h" | "parentId">> & { content?: Record<string, unknown> }
+export type Patch = Partial<Pick<SceneNode, "x" | "y" | "z" | "w" | "h" | "parentId" | "rank">> & { content?: Record<string, unknown> }
 
 export type Peer = {
   connId: string
@@ -60,6 +60,9 @@ export type SceneSnapshot = {
 }
 
 type Pending = { cid: string; op: Op; sent: boolean; ids: string[] }
+
+/** Largest edit sent over the live socket; anything bigger goes over HTTP. */
+const LIVE_FRAME_LIMIT = 60_000
 
 let counter = 0
 export const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}${(counter++).toString(36)}`
@@ -210,7 +213,7 @@ export class SceneStore {
         const n = this.space.node(op.id)
         if (!n) return { type: "batch", ops: [] }
         const back: Patch = {}
-        for (const k of ["x", "y", "z", "w", "h", "parentId"] as const) if (k in op.patch) (back as Record<string, unknown>)[k] = n[k]
+        for (const k of ["x", "y", "z", "w", "h", "parentId", "rank"] as const) if (k in op.patch) (back as Record<string, unknown>)[k] = n[k] ?? null
         if (op.patch.content) {
           const prev: Record<string, unknown> = {}
           const content = n.content as Record<string, unknown>
@@ -260,7 +263,7 @@ export class SceneStore {
    * Put files on a board. Each shows up at once with a local preview, uploads with progress,
    * then becomes a real item pointing at the stored file.
    */
-  async addFiles(files: File[], board: string, place: (i: number, file: File, ratio: number) => { x: number; y: number; w: number; h: number; z: number }) {
+  async addFiles(files: File[], board: string, place: (i: number, file: File, ratio: number) => { x: number; y: number; w: number; h: number; z: number; rank?: number }) {
     if (!this.canEdit(board)) {
       this.onError("You can only view this board.")
       return []
@@ -372,8 +375,22 @@ export class SceneStore {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN || this.status !== "live") return
     for (const p of this.pending) {
       if (p.sent) continue
-      this.ws.send(JSON.stringify({ t: "op", cid: p.cid, op: p.op }))
       p.sent = true
+      const frame = JSON.stringify({ t: "op", cid: p.cid, op: p.op })
+      // The server caps live messages (64 KB, see deploy/start.sh) to keep the socket cheap;
+      // a bigger edit (a long note, a large paste) goes over HTTP instead. The server still
+      // broadcasts the result to everyone, and its reply acknowledges it here directly.
+      if (new TextEncoder().encode(frame).length > LIVE_FRAME_LIMIT) void this.sendOverHttp(p)
+      else this.ws.send(frame)
+    }
+  }
+
+  private async sendOverHttp(p: Pending) {
+    try {
+      const msg = await api<ServerMsg>(`/api/spaces/${this.spaceId}/ops`, { json: { op: { ...p.op, cid: p.cid } } })
+      if (this.pending.some((x) => x.cid === p.cid)) this.receive(msg)
+    } catch (e) {
+      this.receive({ t: "reject", cid: p.cid, error: (e as Error).message, status: (e as { status?: number }).status ?? 0 })
     }
   }
 
@@ -390,6 +407,7 @@ export class SceneStore {
         return
       case "op": {
         const mine = this.pending.findIndex((p) => p.cid === msg.cid)
+        if (mine < 0 && msg.seq <= this.seq) return // already applied (an HTTP-sent edit arrives twice)
         if (mine >= 0) this.pending.splice(mine, 1)
         const busy = new Set(this.pending.flatMap((p) => p.ids))
         for (const c of msg.changes) {

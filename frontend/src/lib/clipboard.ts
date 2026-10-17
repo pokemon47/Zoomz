@@ -35,11 +35,9 @@ export function copyNodes(space: Space, ids: string[], spaceId: string | null): 
   items.forEach((n, i) => walk(n, true, pos[i]))
   const clip = { spaceId, nodes, roots: items.map((n) => n.id), w: x1 - x0, h: y1 - y0 }
   memory = clip
-  try {
-    void navigator.clipboard?.writeText(CLIP_PREFIX + JSON.stringify(clip))
-  } catch {
-    /* clipboard permission denied: the in-memory copy still works in this tab */
-  }
+  // Clipboard permission can be denied (it rejects asynchronously); the in-memory copy still
+  // works in this tab either way.
+  navigator.clipboard?.writeText(CLIP_PREFIX + JSON.stringify(clip)).catch(() => {})
   return clip
 }
 

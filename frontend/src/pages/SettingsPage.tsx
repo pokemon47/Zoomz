@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react"
 import { navigate } from "@/app/router"
 import { useSession, type User } from "@/app/session"
 import { useToast } from "@/app/toasts"
+import { ThemePicker } from "@/components/app/ThemePicker"
 import { TopBar } from "@/components/app/TopBar"
 import { Button } from "@/components/zoomboard/Button"
 import { api } from "@/lib/http"
@@ -59,6 +60,12 @@ export function SettingsPage() {
             <p className="zb-meta">Signed in as {user.email}</p>
             <Button variant="primary" size="sm" type="submit">Save</Button>
           </form>
+        </section>
+
+        <section className="zb-panel zb-card-section">
+          <h2>Appearance</h2>
+          <p>Choose light or dark, or follow your device. It's remembered on this browser.</p>
+          <ThemePicker />
         </section>
 
         <section className="zb-panel zb-card-section">

@@ -313,15 +313,18 @@ export class Space {
     }
   }
 
-  /** Smallest/largest camera scale allowed in a frame. */
-  clampScale(cam: Cam, vp: Viewport): Cam {
+  /**
+   * Keep a camera within the allowed zoom range. The correction scales about `anchor` — the
+   * same point the zoom was made about — so hitting a limit stops the zoom dead instead of
+   * re-centring it (which, repeated per wheel tick, used to slide the board sideways).
+   */
+  clampScale(cam: Cam, vp: Viewport, anchor: { x: number; y: number } = { x: vp.w / 2, y: vp.h / 2 }): Cam {
     let s = cam.s
     if (cam.b === this.rootId) s = Math.max(s, this.fit(this.rootId, vp).s * SPACE.minZoomOfFit)
     s = Math.min(s, SPACE.maxLocalScale)
     if (s === cam.s) return cam
     const k = s / cam.s
-    const cx = vp.w / 2, cy = vp.h / 2
-    return { b: cam.b, s, x: cx - (cx - cam.x) * k, y: cy - (cy - cam.y) * k }
+    return { b: cam.b, s, x: anchor.x - (anchor.x - cam.x) * k, y: anchor.y - (anchor.y - cam.y) * k }
   }
 }
 
@@ -384,8 +387,8 @@ export function layout(space: Space, cam: Cam, vp: Viewport, pointer: Pointer, p
 
   const visit = (boardId: string, c: Cam, level: number, inherited: number) => {
     const kids = space.index.children.get(boardId) ?? []
-    // Boards first (they are the floor), then prints, then notes on top.
-    const sorted = [...kids].sort((a, b) => rank(a) - rank(b))
+    // Stacking order: each item's rank, or by default boards (the floor), then prints, then notes.
+    const sorted = sortByLayer(kids)
     for (const n of sorted) {
       const p = space.at(n)
       const baseX = p.x * c.s + c.x
@@ -435,8 +438,15 @@ export function layout(space: Space, cam: Cam, vp: Viewport, pointer: Pointer, p
   return { items, floorBoard: startCam.b, floorCam: startCam, room, focus }
 }
 
-function rank(n: SceneNode): number {
+/** Paint order of an item among its siblings: its rank, or a default by type. */
+export function layerOf(n: SceneNode): number {
+  if (typeof n.rank === "number") return n.rank
   return n.type === "board" ? 0 : n.type === "note" ? 2 : 1
+}
+
+/** Siblings bottom to top (stable, so equal layers keep their order). */
+export function sortByLayer(nodes: readonly SceneNode[]): SceneNode[] {
+  return nodes.map((n, i) => ({ n, i })).sort((a, b) => layerOf(a.n) - layerOf(b.n) || a.i - b.i).map((x) => x.n)
 }
 
 /** Perspective boost and pointer drift for something `z` high in a frame of scale s. */

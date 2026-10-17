@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { lerpCam } from "./cameraEngine"
-import { SPACE, lodFor } from "./constants"
+import { CameraEngine, lerpCam } from "./cameraEngine"
+import { CARD_BOX, SPACE, TILT, cardBoxFactor, lodFor, perspectiveFor } from "./constants"
 import { indexScene, pathTo, previewImages } from "./scene"
-import { Space, covers, layout, lift, localFromScreen } from "./space"
+import { Space, covers, layerOf, layout, lift, localFromScreen, sortByLayer } from "./space"
+import { SceneStore } from "./store"
+import { layerOps, topRank } from "./layers"
 import { SCENERY, THEMES, layerMarkup, placeLayers } from "./scenery"
 import type { Scene } from "./types"
 
@@ -178,5 +180,145 @@ describe("scenery", () => {
     const deep = at(250)
     expect(deep.length).toBeGreaterThan(3)
     expect(deep.every((l) => l.n - 250 > SCENERY.near && l.n - 250 <= SCENERY.far)).toBe(true)
+  })
+})
+
+describe("zooming stays anchored", () => {
+  // World point (root frame) under a screen point.
+  const worldAt = (s: Space, e: CameraEngine, px: number, py: number) => {
+    const c = s.toFrame(e.target, "root")
+    return { x: (px - c.x) / c.s, y: (py - c.y) / c.s }
+  }
+
+  it("zooming out past the limit with the pointer off-centre doesn't drift", () => {
+    const e = new CameraEngine(space, vp, space.fit("root", vp))
+    const px = vp.w * 0.85, py = vp.h * 0.3
+    for (let i = 0; i < 200; i++) e.zoomAt(px, py, 0.8) // far past the minimum
+    const a = worldAt(space, e, px, py)
+    for (let i = 0; i < 200; i++) e.zoomAt(px, py, 0.8)
+    const b = worldAt(space, e, px, py)
+    expect(b.x).toBeCloseTo(a.x, 6)
+    expect(b.y).toBeCloseTo(a.y, 6)
+  })
+
+  it("the point under the pointer stays put while zooming out (until the limit)", () => {
+    const e = new CameraEngine(space, vp, space.fit("root", vp))
+    const px = vp.w * 0.2, py = vp.h * 0.75
+    const before = worldAt(space, e, px, py)
+    for (let i = 0; i < 6; i++) e.zoomAt(px, py, 0.9)
+    const after = worldAt(space, e, px, py)
+    expect(after.x).toBeCloseTo(before.x, 6)
+    expect(after.y).toBeCloseTo(before.y, 6)
+  })
+
+  it("the gliding display keeps the pointer's point fixed on every frame", () => {
+    const e = new CameraEngine(space, vp, space.fit("root", vp))
+    const px = vp.w * 0.9, py = vp.h * 0.1
+    const at = () => {
+      const c = space.toFrame(e.display, "root")
+      return { x: (px - c.x) / c.s, y: (py - c.y) / c.s }
+    }
+    const start = at()
+    for (let i = 0; i < 5; i++) e.zoomAt(px, py, 0.85)
+    for (let f = 0; f < 90; f++) {
+      e.tick(f * 16.7, 16.7)
+      const p = at()
+      expect(p.x).toBeCloseTo(start.x, 4)
+      expect(p.y).toBeCloseTo(start.y, 4)
+    }
+  })
+
+  it("can zoom out a long way", () => {
+    const e = new CameraEngine(space, vp, space.fit("root", vp))
+    for (let i = 0; i < 300; i++) e.zoomAt(vp.w / 2, vp.h / 2, 0.8)
+    expect(e.target.s).toBeLessThan(space.fit("root", vp).s * 0.12)
+  })
+})
+
+describe("layers", () => {
+  const make = () => {
+    const nodes: Scene["nodes"] = [
+      { id: "root", type: "board", parentId: null, x: 0, y: 0, w: 10, h: 10, content: { title: "Root" } },
+      { id: "p", type: "image", parentId: "root", x: 0, y: 0, w: 10, h: 10, content: { title: "p", src: "", alt: "" } },
+      { id: "q", type: "image", parentId: "root", x: 0, y: 0, w: 10, h: 10, content: { title: "q", src: "", alt: "" } },
+      { id: "r", type: "image", parentId: "root", x: 0, y: 0, w: 10, h: 10, content: { title: "r", src: "", alt: "" } },
+    ]
+    return new SceneStore({ space: { id: "s", title: "t", role: "owner", scenery: "studio", workspaceId: "" }, rootBoardId: "root", seq: 0, nodes, boardRoles: {} }, { local: true })
+  }
+  const order = (st: SceneStore) => sortByLayer(st.space.index.children.get("root")!).map((n) => n.id).join("")
+
+  it("brings to front, sends to back, and steps one at a time", () => {
+    const st = make()
+    expect(order(st)).toBe("pqr")
+    st.commit(layerOps(st.space, "p", "front")!)
+    expect(order(st)).toBe("qrp")
+    st.commit(layerOps(st.space, "p", "back")!)
+    expect(order(st)).toBe("pqr")
+    st.commit(layerOps(st.space, "p", "forward")!) // ties: renumbers the stack
+    expect(order(st)).toBe("qpr")
+    st.commit(layerOps(st.space, "p", "forward")!)
+    expect(order(st)).toBe("qrp")
+    st.commit(layerOps(st.space, "r", "backward")!)
+    expect(order(st)).toBe("rqp")
+    expect(layerOps(st.space, "p", "front")).toBeNull() // already on top
+  })
+
+  it("layer changes undo", () => {
+    const st = make()
+    st.commit(layerOps(st.space, "q", "front")!)
+    expect(order(st)).toBe("prq")
+    st.undo()
+    expect(order(st)).toBe("pqr")
+  })
+
+  it("new things land on top", () => {
+    const st = make()
+    expect(topRank(st.space, "root")).toBeGreaterThan(Math.max(...st.space.index.children.get("root")!.map(layerOf)))
+  })
+})
+
+describe("card tilt", () => {
+  // Nearest a corner of a w×h card gets to the eye under a tilt (rotate about the centre,
+  // lifted by `y` px), as a fraction of the perspective distance. ≥ 1 means behind the eye.
+  const reach = (w: number, h: number, rx: number, ry: number, lift: number) => {
+    const p = perspectiveFor(w, h)
+    const a = (rx * Math.PI) / 180, b = (ry * Math.PI) / 180
+    let worst = 0
+    for (const [x, y] of [[-w / 2, -h / 2], [w / 2, -h / 2], [-w / 2, h / 2], [w / 2, h / 2]]) {
+      // rotateX then rotateY; z toward the viewer is positive
+      const z1 = -y * Math.sin(a)
+      const z = x * Math.sin(b) + z1 * Math.cos(b)
+      worst = Math.max(worst, (z + Math.abs(lift)) / p)
+    }
+    return worst
+  }
+
+  it("never brings a corner anywhere near the eye, however big the card", () => {
+    for (const [w, h] of [[220, 290], [1200, 900], [6000, 7900], [20000, 20000]]) {
+      expect(reach(w, h, TILT.hover.rotateX, TILT.hover.rotateY, TILT.hover.y)).toBeLessThan(0.15)
+      expect(reach(w, h, TILT.drag.rotateX, 0, TILT.drag.y)).toBeLessThan(0.15)
+    }
+  })
+
+  it("leaves normal-sized cards (prints and notes) exactly as before", () => {
+    expect(perspectiveFor(200, 290)).toBe(900)
+    expect(perspectiveFor(220, 190)).toBe(900)
+  })
+})
+
+describe("card layout box", () => {
+  it("never lets a card's own box exceed CARD_BOX, and keeps its on-screen size", () => {
+    for (const [w, h] of [[200, 290], [1024, 700], [6000, 7900], [20000, 20000]]) {
+      const f = cardBoxFactor({ type: "image", w, h })
+      expect(Math.max(w / f, h / f)).toBeLessThanOrEqual(CARD_BOX + 1e-9)
+      const s = 0.03
+      expect((w / f) * (s * f)).toBeCloseTo(w * s) // same size on screen
+    }
+  })
+
+  it("leaves normal cards and boards alone", () => {
+    expect(cardBoxFactor({ type: "note", w: 220, h: 190 })).toBe(1)
+    expect(cardBoxFactor({ type: "image", w: 220, h: 420 })).toBe(1)
+    expect(cardBoxFactor({ type: "board", w: 9000, h: 9000 })).toBe(1)
   })
 })
