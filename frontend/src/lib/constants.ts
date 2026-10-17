@@ -85,6 +85,18 @@ export const TILT = {
   press: { y: 3 },
 } as const
 
+/** Longest side of a card's own layout box; bigger cards are laid out at this and scaled up. */
+export const CARD_BOX = 1024
+
+/**
+ * How much a card is shrunk for layout (≥ 1). Boards are exempt: they're never tilted or
+ * promoted to their own GPU layer, and their faces carry the board's frame.
+ */
+export function cardBoxFactor(n: { type: string; w: number; h: number }): number {
+  if (n.type === "board") return 1
+  return Math.max(1, Math.max(n.w, n.h) / CARD_BOX)
+}
+
 /**
  * Perspective for a card's tilt, in its own units. Scaling it with the card keeps the tilt
  * looking the same at any size (a 220×290 card at 900px) — and, crucially, keeps a card that

@@ -31,7 +31,7 @@ import type { Tactile } from "@/components/zoomboard/TactileSlab"
 import { ZoomControls } from "@/components/zoomboard/ZoomControls"
 import { CameraEngine } from "@/lib/cameraEngine"
 import { copyNodes, lastClip, parseClip, pasteOps } from "@/lib/clipboard"
-import { MOTION, SPACE, ZOOM, floorFor, perspectiveFor } from "@/lib/constants"
+import { MOTION, SPACE, ZOOM, cardBoxFactor, floorFor, perspectiveFor } from "@/lib/constants"
 import { api } from "@/lib/http"
 import { pathTo, titleOf } from "@/lib/scene"
 import { SCENERY, themeById, type SceneryId } from "@/lib/scenery"
@@ -1224,18 +1224,22 @@ function Item({ placed, space, tactile, selected, multi, reduced, dragging, drop
     scale *= morph.extra
     opacity *= morph.fade
   }
+  // Lay big cards out at a capped size and make up for it in the scale: same place and same
+  // size on screen, but the card's own box (what the GPU rasterises once hover or drag gives it
+  // a 3D tilt) never exceeds CARD_BOX px. A card resized to 9000×12000 used to become a ~100
+  // megapixel layer, over the GPU budget, so its tiles were dropped (black blocks).
+  const f = cardBoxFactor(n)
   const style: CSSProperties = {
-    width: n.w,
-    height: n.h,
-    transform: `translate(${x}px, ${y}px) scale(${scale})`,
+    width: n.w / f,
+    height: n.h / f,
+    transform: `translate(${x}px, ${y}px) scale(${scale * f})`,
     opacity: hidden ? 0 : opacity,
     zIndex: dragging ? 50_000 : order,
-    ["--zh" as string]: n.z ?? 0,
-    ["--s" as string]: scale,
-    // The hover/drag tilt's perspective, in the card's own units, scaled with the card: a fixed
-    // 900px is gentle on a 220px card but lets a resized 6000px card swing past the eye point,
-    // which the browser can't project (garbled card, screen-sized black layer).
-    perspective: perspectiveFor(n.w, n.h),
+    ["--zh" as string]: (n.z ?? 0) / f,
+    ["--s" as string]: scale * f,
+    // The tilt's perspective scales with the card, so every card tilts the same and no corner
+    // can swing past the eye point (which can't be projected).
+    perspective: perspectiveFor(n.w / f, n.h / f),
     pointerEvents: opacity < 0.2 || dragging || hidden ? "none" : undefined,
     willChange: dragging ? "transform" : undefined,
   }
@@ -1252,7 +1256,7 @@ function Item({ placed, space, tactile, selected, multi, reduced, dragging, drop
       onFocus={(e) => e.target === e.currentTarget && onFocusItem(n.id)}
     >
       {n.type !== "board" && n.w * scale < 1600 && <div className="zb-hshadow" aria-hidden />}
-      {renderCard(n, placed, space, tactile, selected && !multi, reduced, lod, dropTarget, n.w * scale)}
+      {renderCard(n, placed, space, tactile, selected && !multi, reduced, lod, dropTarget, n.w * scale, f)}
     </div>
   )
 }
@@ -1266,10 +1270,10 @@ function pick(c: { src: string; thumb_256?: string; thumb_1024?: string }, scree
   return c.src
 }
 
-function renderCard(n: SceneNode, placed: Placed, space: Space, tactile: Tactile, selected: boolean, reduced: boolean, lod: Placed["lod"], dropTarget: boolean, screenW: number) {
+function renderCard(n: SceneNode, placed: Placed, space: Space, tactile: Tactile, selected: boolean, reduced: boolean, lod: Placed["lod"], dropTarget: boolean, screenW: number, f: number) {
   const progress = (n.content as { progress?: number; status?: string }).status === "uploading" ? ((n.content as { progress?: number }).progress ?? 0) : undefined
   if (n.type === "image") return <ImageCard title={n.content.title} alt={n.content.alt} src={pick(n.content, screenW)} lod={lod} selected={selected} tactile={tactile} reduced={reduced} progress={progress} />
-  if (n.type === "note") return <NoteCard title={n.content.title} body={n.content.body} w={n.w} h={n.h} lod={lod} selected={selected} tactile={tactile} reduced={reduced} />
+  if (n.type === "note") return <NoteCard title={n.content.title} body={n.content.body} w={n.w / f} h={n.h / f} lod={lod} selected={selected} tactile={tactile} reduced={reduced} />
   if (n.type === "file")
     return (
       <FileCard

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { CameraEngine, lerpCam } from "./cameraEngine"
-import { SPACE, TILT, lodFor, perspectiveFor } from "./constants"
+import { CARD_BOX, SPACE, TILT, cardBoxFactor, lodFor, perspectiveFor } from "./constants"
 import { indexScene, pathTo, previewImages } from "./scene"
 import { Space, covers, layerOf, layout, lift, localFromScreen, sortByLayer } from "./space"
 import { SceneStore } from "./store"
@@ -303,5 +303,22 @@ describe("card tilt", () => {
   it("leaves normal-sized cards (prints and notes) exactly as before", () => {
     expect(perspectiveFor(200, 290)).toBe(900)
     expect(perspectiveFor(220, 190)).toBe(900)
+  })
+})
+
+describe("card layout box", () => {
+  it("never lets a card's own box exceed CARD_BOX, and keeps its on-screen size", () => {
+    for (const [w, h] of [[200, 290], [1024, 700], [6000, 7900], [20000, 20000]]) {
+      const f = cardBoxFactor({ type: "image", w, h })
+      expect(Math.max(w / f, h / f)).toBeLessThanOrEqual(CARD_BOX + 1e-9)
+      const s = 0.03
+      expect((w / f) * (s * f)).toBeCloseTo(w * s) // same size on screen
+    }
+  })
+
+  it("leaves normal cards and boards alone", () => {
+    expect(cardBoxFactor({ type: "note", w: 220, h: 190 })).toBe(1)
+    expect(cardBoxFactor({ type: "image", w: 220, h: 420 })).toBe(1)
+    expect(cardBoxFactor({ type: "board", w: 9000, h: 9000 })).toBe(1)
   })
 })
