@@ -32,6 +32,7 @@ import { ZoomControls } from "@/components/zoomboard/ZoomControls"
 import { CameraEngine } from "@/lib/cameraEngine"
 import { copyNodes, lastClip, parseClip, pasteOps } from "@/lib/clipboard"
 import { MOTION, SPACE, ZOOM, cardBoxFactor, floorFor, perspectiveFor } from "@/lib/constants"
+import { IMPORT_GRID, IMPORT_LIMITS, countFiles, fileCard, planFolder, readDrop, type BoardPlan, type FolderTree } from "@/lib/folderImport"
 import { api } from "@/lib/http"
 import { pathTo, titleOf } from "@/lib/scene"
 import { SCENERY, themeById, type SceneryId } from "@/lib/scenery"
@@ -412,6 +413,51 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       setAnnouncement(`Added ${files.length === 1 ? files[0].name : `${files.length} files`} to ${titleOf(space.node(board)!)}`)
     },
     [boardAt, clampInto, engine, lay.focus, localAt, space, spawn, store, toast],
+  )
+
+  const importFolders = useCallback(
+    async (folders: FolderTree[], at: { x: number; y: number }) => {
+      const target = boardAt(at.x, at.y, [], true)
+      if (!store.canEdit(target)) return toast("You can only view this board.")
+      const total = folders.reduce((n, f) => n + countFiles(f), 0)
+      if (total >= IMPORT_LIMITS.files) toast(`Only the first ${IMPORT_LIMITS.files} files are imported.`)
+      const anchor = localAt(target, at.x, at.y)
+      const top = topRank(space, target)
+      // Every board first, in one undoable edit, then each board's files.
+      const ops: Op[] = []
+      const uploads: { board: string; plan: BoardPlan }[] = []
+      const roots: string[] = []
+      const make = (plan: BoardPlan, parentId: string, x: number, y: number, rank: number) => {
+        const id = newId("board")
+        ops.push({ type: "create", node: { id, type: "board", parentId, x, y, z: 0, w: plan.w, h: plan.h, rank, content: { title: plan.name.slice(0, 200), description: null, frame: plan.frame } } })
+        if (plan.files.length) uploads.push({ board: id, plan })
+        plan.folders.forEach((f, i) => make(f.plan, id, f.x, f.y, i))
+        return id
+      }
+      const plans = folders.map(planFolder)
+      const span = plans.reduce((w, p) => w + p.w, 0) + (plans.length - 1) * IMPORT_GRID.gap
+      let x = anchor.x - span / 2
+      plans.forEach((plan, i) => {
+        const p = clampInto(target, plan, x, anchor.y - plan.h / 2)
+        roots.push(make(plan, target, p.x, p.y, top + i))
+        x += plan.w + IMPORT_GRID.gap
+      })
+      // The server takes at most 500 edits at once.
+      for (let i = 0; i < ops.length; i += 500) {
+        const chunk = ops.slice(i, i + 500)
+        if (!store.commit(chunk.length === 1 ? chunk[0] : { type: "batch", ops: chunk }, "import folder")) return
+      }
+      spawn(roots)
+      setAnnouncement(`Importing ${folders.length === 1 ? folders[0].name : `${folders.length} folders`}: ${total} files`)
+      for (const { board, plan } of uploads) {
+        await store.addFiles(plan.files, board, (i, file, ratio) => {
+          const { w, h } = fileCard(file, ratio)
+          const cell = plan.fileCells[i]
+          return { x: cell.x + (IMPORT_GRID.fileCellW - w) / 2, y: cell.y + (IMPORT_GRID.fileCellH - h) / 2, w, h, z: 12 + Math.round(Math.random() * 26), rank: i }
+        })
+      }
+    },
+    [boardAt, clampInto, localAt, space, spawn, store, toast],
   )
 
   const nearCentre = useCallback(
@@ -917,7 +963,13 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
     if (!isFileDrag(e)) return
     e.preventDefault()
     setFileDrag(null)
-    void addFiles(Array.from(e.dataTransfer.files), local(e))
+    const at = local(e)
+    const drop = readDrop(e.dataTransfer)
+    if (!drop) return void addFiles(Array.from(e.dataTransfer.files), at)
+    void drop.folders
+      .then((folders) => importFolders(folders, at))
+      .catch(() => toast("That folder couldn't be read."))
+    if (drop.looseFiles.length) void addFiles(drop.looseFiles, at)
   }
 
   // ---------- keyboard ----------
