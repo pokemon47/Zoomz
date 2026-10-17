@@ -131,6 +131,14 @@ export class CameraEngine {
     this.flight = { frame: to.b, from, to, start: now, dur }
   }
 
+  /** Put the camera somewhere immediately (direct manipulation, e.g. dragging the minimap). */
+  jumpTo(cam: Cam) {
+    this.flight = null
+    this.display = this.space.normalize(cam, this.vp)
+    this.target = this.display
+    this.track()
+  }
+
   stop() {
     this.flight = null
     this.target = this.display

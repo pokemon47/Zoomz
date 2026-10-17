@@ -513,3 +513,40 @@
 
 /* the board you're standing in, at screen size (no giant scaled card) */
 .zb-room { border-radius: 0; z-index: 0; }
+
+/* ---------- movable chrome panels ---------- */
+.zb-panel-float { position: absolute; z-index: 20; display: flex; align-items: center; gap: 6px; }
+.zb-panel-float.is-moving { z-index: 30; filter: drop-shadow(0 18px 18px rgba(120, 90, 60, 0.18)); }
+.zb-panel-grip {
+  flex: none;
+  width: 22px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--ink-muted);
+  box-shadow: var(--zb-l1);
+  cursor: grab;
+  touch-action: none;
+}
+.zb-panel-float.is-moving .zb-panel-grip { cursor: grabbing; }
+.zb-panel-grip:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 3px; }
+.zb-panel-stack { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+
+/* ---------- minimap ---------- */
+.zb-minimap { width: 252px; padding: 10px; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--zb-l2); }
+.zb-minimap-head { display: flex; align-items: center; gap: 8px; padding: 0 2px 8px; font: 700 13px/1 var(--zb-sans); }
+.zb-minimap-trail { display: inline-flex; align-items: center; gap: 3px; }
+.zb-minimap-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zb-minimap-well { border-radius: var(--radius-md); overflow: hidden; box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1); transition: background-color 300ms ease-out; }
+.zb-minimap-svg { display: block; cursor: crosshair; touch-action: none; }
+.zb-minimap-svg.is-in { animation: zb-map-in 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.zb-minimap-svg.is-out { animation: zb-map-out 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes zb-map-in { from { transform: scale(0.45); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes zb-map-out { from { transform: scale(1.8); opacity: 0; } to { transform: none; opacity: 1; } }
+.zb-minimap-view { fill: rgba(110, 139, 255, 0.14); stroke: var(--cobalt); stroke-width: 2.5px; }
+@media (prefers-reduced-motion: reduce) { .zb-minimap-svg.is-in, .zb-minimap-svg.is-out { animation: none; } }
+@media (max-width: 1000px) { .zb-minimap { width: 200px; } .zb-minimap-svg { width: 180px; height: 116px; } }

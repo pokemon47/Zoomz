@@ -18,9 +18,11 @@ import { AddMenu } from "@/components/zoomboard/AddMenu"
 import { BoardCard } from "@/components/zoomboard/BoardCard"
 import { Breadcrumbs } from "@/components/zoomboard/Breadcrumbs"
 import { CreateDialog, type CreateKind } from "@/components/zoomboard/CreateDialog"
+import { DraggablePanel } from "@/components/zoomboard/DraggablePanel"
 import { FileCard } from "@/components/zoomboard/FileCard"
 import { ImageCard } from "@/components/zoomboard/ImageCard"
 import { LevelBadge } from "@/components/zoomboard/LevelBadge"
+import { Minimap } from "@/components/zoomboard/Minimap"
 import { NoteCard } from "@/components/zoomboard/NoteCard"
 import { SceneryPicker } from "@/components/zoomboard/SceneryPicker"
 import type { Tactile } from "@/components/zoomboard/TactileSlab"
@@ -262,6 +264,19 @@ export function SpaceCanvas({ scene }: Props) {
       kick()
     },
     [engine, kick],
+  )
+
+  /** Minimap: put a point of the focus board at the centre of the screen. */
+  const centerOn = useCallback(
+    (lx: number, ly: number, glide: boolean) => {
+      const board = layRef.current.focus
+      const c = space.toFrame(engine.display, board)
+      const cam = { b: board, s: c.s, x: engine.vp.w / 2 - lx * c.s, y: engine.vp.h / 2 - ly * c.s }
+      if (glide) engine.flyTo(cam, performance.now())
+      else engine.jumpTo(cam)
+      kick()
+    },
+    [engine, kick, space],
   )
 
   // ---------- adding things ----------
@@ -662,20 +677,22 @@ export function SpaceCanvas({ scene }: Props) {
         )}
       </div>
 
-      <div className="zb-chrome-tl">
+      <DraggablePanel id="nav" label="the path" defaultPos={{ corner: "tl", dx: 16, dy: 16 }}>
         <Breadcrumbs path={path.map((b) => ({ id: b.id, title: b.content.title }))} onNavigate={(c) => flyToBoard(c.id)} onBack={path.length > 1 ? goUp : undefined} />
-      </div>
+      </DraggablePanel>
       <div className="zb-chrome-tr">
         <SceneryPicker value={scenery} onChange={pickScenery} />
         <AddMenu onFiles={(f) => void addFiles(f)} onNewNote={() => setCreating("note")} onNewBoard={() => setCreating("board")} />
       </div>
-      <div className="zb-chrome-br">
-        <LevelBadge depth={focusDepth} />
-        <ZoomControls readout={readout} onZoomIn={() => zoomCentre(ZOOM.step)} onZoomOut={() => zoomCentre(1 / ZOOM.step)} onFit={() => flyToBoard(lay.focus)} />
-      </div>
-      <div className="zb-chrome-bl" aria-hidden>
-        <div className="zb-hint">Scroll to move through · drag to pan · drop files anywhere · drag cards between boards</div>
-      </div>
+      <DraggablePanel id="zoom" label="the zoom controls" defaultPos={{ corner: "br", dx: 16, dy: 16 }}>
+        <div className="zb-panel-stack">
+          <LevelBadge depth={focusDepth} />
+          <ZoomControls readout={readout} onZoomIn={() => zoomCentre(ZOOM.step)} onZoomOut={() => zoomCentre(1 / ZOOM.step)} onFit={() => flyToBoard(lay.focus)} />
+        </div>
+      </DraggablePanel>
+      <DraggablePanel id="minimap" label="the map" defaultPos={{ corner: "bl", dx: 16, dy: 16 }}>
+        <Minimap space={space} focus={lay.focus} cam={engine.display} vp={vp} onCenter={centerOn} />
+      </DraggablePanel>
       <CreateDialog kind={creating} where={focusTitle} onClose={() => setCreating(null)} onCreate={createNode} />
       <div className="sr-only-zb" aria-live="polite">
         {announcement || `Now in ${focusTitle}`}
