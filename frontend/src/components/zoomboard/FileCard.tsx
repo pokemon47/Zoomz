@@ -31,7 +31,7 @@ export const FileCard = memo(function FileCard({ title, src, mime, size, lod, se
         <span className={cn("zb-file-tab", kind.tone)}>{kind.label}</span>
       </div>
       {lod !== "far" && (
-        <div key={lod} className="zb-lod-block zb-file-meta">
+        <div className="zb-file-meta">
           <div className="zb-cap">{title}</div>
           <div className="zb-file-row">
             <span className="zb-meta">{formatBytes(size)}</span>

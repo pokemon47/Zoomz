@@ -357,6 +357,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
+  border-radius: inherit;
   pointer-events: none;
   background-color: color-mix(in srgb, var(--floor-c) calc(var(--face-alpha, 1) * 100%), transparent);
   /* dot radius scales with the pitch so the inner floor matches the floor you land on */
@@ -509,3 +510,6 @@
 @media (max-width: 1000px) {
   .zb-chrome-tr { top: auto; bottom: 84px; flex-direction: column-reverse; align-items: flex-end; }
 }
+
+/* the board you're standing in, at screen size (no giant scaled card) */
+.zb-room { border-radius: 0; z-index: 0; }

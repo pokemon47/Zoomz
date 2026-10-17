@@ -25,7 +25,7 @@ export const ImageCard = memo(function ImageCard({ title, alt, src, lod, selecte
     >
       <img className="zb-ph" src={src} alt="" draggable={false} decoding="async" />
       {lod !== "far" && (
-        <div key={lod} className="zb-lod-block">
+        <div>
           <div className="zb-cap">{title}</div>
           {lod === "close" && <div className="zb-alt">{alt}</div>}
         </div>

@@ -22,7 +22,7 @@ export const NoteCard = memo(function NoteCard({ title, body, lod, selected, tac
       className={cn("zb-note", `zb-${lod}`, selected && "is-selected")}
       aria-label={`Note: ${title}`}
     >
-      <div key={lod} className="zb-lod-block">
+      <div>
         <h4>{title}</h4>
         {lod === "close" && <p>{body}</p>}
         {lod === "medium" && <p className="zb-meta" aria-hidden>Zoom in to read</p>}

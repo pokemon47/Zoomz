@@ -295,6 +295,12 @@ export type Layout = {
   floorBoard: string
   /** Screen scale of the floor board (for the dot grid). */
   floorCam: Cam
+  /**
+   * The board you're standing in, when its card covers the whole screen. It is drawn as a
+   * screen-sized floor layer instead of a card scaled up 50×+ (which overflows GPU textures
+   * and flickers). Looks identical: same tint, same alpha, same dot grid.
+   */
+  room: { board: string; cam: Cam } | null
   /** Deepest board the viewer is "in" — drives breadcrumbs. */
   focus: string
 }
@@ -314,6 +320,7 @@ export function layout(space: Space, cam: Cam, vp: Viewport, pointer: Pointer, p
   let order = 0
   let focus = cam.b
   let focusLevel = space.depthOf(cam.b)
+  let room: Layout["room"] = null
 
   const visit = (boardId: string, c: Cam, level: number, inherited: number) => {
     const kids = space.index.children.get(boardId) ?? []
@@ -326,6 +333,17 @@ export function layout(space: Space, cam: Cam, vp: Viewport, pointer: Pointer, p
       if (n.type === "board") {
         const w = n.w * c.s, h = n.h * c.s
         if (baseX > vp.w + margin || baseY > vp.h + margin || baseX + w < -margin || baseY + h < -margin) continue
+        if (covers({ x: baseX, y: baseY, w, h }, vp)) {
+          // Standing in it: it's a floor now, not an object.
+          const inner = space.toChild(c, n.id)
+          room = { board: n.id, cam: inner }
+          if (level + 1 > focusLevel) {
+            focus = n.id
+            focusLevel = level + 1
+          }
+          visit(n.id, inner, level + 1, inherited)
+          continue
+        }
         const span = Math.min(w / vp.w, h / vp.h)
         // No covers: a board always shows what's inside; only tiny far-away cards skip it.
         const reveal = smooth(SPACE.contentsFrom, SPACE.contentsFull, Math.min(w, h))
@@ -354,7 +372,7 @@ export function layout(space: Space, cam: Cam, vp: Viewport, pointer: Pointer, p
   visit(startCam.b, startCam, space.depthOf(startCam.b), 1)
   // Things flying past the camera paint over everything else.
   for (const it of items) if (it.g > 1.6) it.order += 10_000
-  return { items, floorBoard: startCam.b, floorCam: startCam, focus }
+  return { items, floorBoard: startCam.b, floorCam: startCam, room, focus }
 }
 
 function rank(n: SceneNode): number {

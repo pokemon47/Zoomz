@@ -181,6 +181,14 @@ export function SpaceCanvas({ scene }: Props) {
     backgroundPosition: `${lay.floorCam.x}px ${lay.floorCam.y}px`,
     opacity: openSky ? 0 : Math.min(1, Math.max(0, (pitch - 6) / 8)),
   }
+  // The board you're standing in, drawn screen-sized (see Layout.room) — same look as its card face.
+  const roomStyle: CSSProperties | null = lay.room
+    ? {
+        ["--floor-c" as string]: floorFor(space.depthOf(lay.room.board)),
+        ["--dot" as string]: `${24 * lay.room.cam.s}px`,
+        backgroundPosition: `${lay.room.cam.x}px ${lay.room.cam.y}px`,
+      }
+    : null
 
   const now = performance.now()
   const morphFor = (id: string) => {
@@ -628,6 +636,7 @@ export function SpaceCanvas({ scene }: Props) {
         <Scenery theme={theme} z={travel.zoom * SCENERY.layersPerEFold + 2} panX={-travel.x} panY={-travel.y} pointer={engine.pointer} vp={vp} parallax={!reduced} />
         <div className="zb-floor" aria-hidden />
         <div className="zb-dots" style={dotsStyle} aria-hidden />
+        {roomStyle && <div className="zb-inner-floor zb-room" style={roomStyle} aria-hidden />}
         <div className="zb-vignette" aria-hidden />
         {ordered.map((p) => (
           <Item
@@ -716,7 +725,7 @@ function Item({ placed, space, tactile, selected, reduced, dragging, dropTarget,
   const style: CSSProperties = {
     width: n.w,
     height: n.h,
-    transform: `translate3d(${x}px, ${y}px, 0) scale(${scale})`,
+    transform: `translate(${x}px, ${y}px) scale(${scale})`,
     opacity,
     zIndex: dragging ? 50_000 : order,
     ["--zh" as string]: n.z ?? 0,
@@ -736,7 +745,7 @@ function Item({ placed, space, tactile, selected, reduced, dragging, dropTarget,
       onKeyDown={(e) => onKeyDown(e, n)}
       onFocus={(e) => e.target === e.currentTarget && onFocusItem(n.id)}
     >
-      {n.type !== "board" && <div className="zb-hshadow" aria-hidden />}
+      {n.type !== "board" && n.w * scale < 1600 && <div className="zb-hshadow" aria-hidden />}
       {renderCard(n, placed, space, tactile, selected, reduced, lod, dropTarget)}
     </div>
   )
