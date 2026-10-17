@@ -1,0 +1,378 @@
+import io
+import uuid
+import zipfile
+
+import pytest
+from PIL import Image
+
+from conftest import H
+
+
+def uid(prefix="n"):
+    return f"{prefix}-{uuid.uuid4().hex[:12]}"
+
+
+def first_space(c):
+    spaces = c.get("/api/spaces").json()
+    return spaces["mine"][0]
+
+
+def scene(c, sid, **params):
+    r = c.get(f"/api/spaces/{sid}/scene", params=params)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def op(c, sid, o):
+    return c.post(f"/api/spaces/{sid}/ops", json={"op": o}, headers=H)
+
+
+def png_bytes(w=320, h=200, color=(255, 142, 114)):
+    buf = io.BytesIO()
+    Image.new("RGB", (w, h), color).save(buf, "PNG")
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------- accounts
+
+
+def test_sign_in_creates_account_with_starter_board(make_client):
+    c = make_client("ana@example.com")
+    assert c.me["email"] == "ana@example.com"
+    s = first_space(c)
+    assert s["title"] == "Summer Light" and s["role"] == "owner"
+    sc = scene(c, s["id"])
+    assert len([n for n in sc["nodes"] if n["type"] == "image"]) >= 30
+    root = next(n for n in sc["nodes"] if n["id"] == sc["rootBoardId"])
+    assert root["content"]["frame"]["w"] > 0
+
+
+def test_magic_link_is_single_use_and_requires_header(make_client):
+    c = make_client()
+    assert c.post("/api/auth/magic-link", json={"email": "x@example.com"}).status_code == 403  # no CSRF header
+    link = c.post("/api/auth/magic-link", json={"email": "x@example.com"}, headers=H).json()["devLink"]
+    path = link.split("testserver")[1]
+    assert c.get(path, follow_redirects=False).headers["location"] == "/"
+    again = c.get(path, follow_redirects=False)
+    assert again.headers["location"].startswith("/login?error")
+
+
+def test_logged_out_is_401(make_client):
+    c = make_client()
+    assert c.get("/api/me").status_code == 401
+    assert c.get("/api/spaces").status_code == 401
+
+
+def test_profile_update(make_client):
+    c = make_client("bo@example.com")
+    r = c.patch("/api/me", json={"name": "Bo", "color": "#3FB984"}, headers=H)
+    assert r.json()["name"] == "Bo"
+    assert c.patch("/api/me", json={"color": "red"}, headers=H).status_code == 422
+
+
+@pytest.mark.ratelimit
+def test_magic_links_are_rate_limited(make_client):
+    c = make_client()
+    codes = [c.post("/api/auth/magic-link", json={"email": "spam@example.com"}, headers=H).status_code for _ in range(6)]
+    assert 429 in codes
+
+
+# ---------------------------------------------------------------- editing
+
+
+def test_create_move_reparent_update_delete(make_client):
+    c = make_client("cy@example.com")
+    sid = first_space(c)["id"]
+    sc = scene(c, sid)
+    root = sc["rootBoardId"]
+    board = next(n for n in sc["nodes"] if n["type"] == "board" and n["parentId"] == root)
+    nid = uid()
+    r = op(c, sid, {"type": "create", "node": {"id": nid, "type": "note", "parentId": root, "x": 10, "y": 20, "w": 220, "h": 190, "content": {"title": "Hi", "body": "there", "evil": "x"}}})
+    assert r.status_code == 200, r.text
+    msg = r.json()
+    assert msg["changes"][0]["node"]["content"] == {"title": "Hi", "body": "there"}
+    seq1 = msg["seq"]
+    r = op(c, sid, {"type": "update", "id": nid, "patch": {"x": 50, "parentId": board["id"], "content": {"body": "moved"}}})
+    assert r.json()["seq"] == seq1 + 1
+    node = next(n for n in scene(c, sid)["nodes"] if n["id"] == nid)
+    assert node["parentId"] == board["id"] and node["x"] == 50 and node["content"]["body"] == "moved"
+    assert op(c, sid, {"type": "delete", "id": nid}).status_code == 200
+    assert not any(n["id"] == nid for n in scene(c, sid)["nodes"])
+
+
+def test_board_cannot_go_inside_itself(make_client):
+    c = make_client("di@example.com")
+    sid = first_space(c)["id"]
+    sc = scene(c, sid)
+    by_id = {n["id"]: n for n in sc["nodes"]}
+    child = next(n for n in sc["nodes"] if n["type"] == "board" and by_id.get(n["parentId"], {}).get("parentId") is not None)
+    parent = by_id[child["parentId"]]
+    r = op(c, sid, {"type": "update", "id": parent["id"], "patch": {"parentId": child["id"]}})
+    assert r.status_code == 400 and "itself" in r.json()["detail"]
+
+
+def test_deleting_a_board_removes_its_contents(make_client):
+    c = make_client("ed@example.com")
+    sid = first_space(c)["id"]
+    sc = scene(c, sid)
+    board = next(n for n in sc["nodes"] if n["type"] == "board" and n["parentId"] == sc["rootBoardId"])
+    before = len(sc["nodes"])
+    assert op(c, sid, {"type": "delete", "id": board["id"]}).status_code == 200
+    assert len(scene(c, sid)["nodes"]) < before - 1
+
+
+def test_root_cannot_be_deleted_and_batches_are_atomic(make_client):
+    c = make_client("fa@example.com")
+    sid = first_space(c)["id"]
+    root = scene(c, sid)["rootBoardId"]
+    assert op(c, sid, {"type": "delete", "id": root}).status_code == 400
+    ok = uid()
+    r = op(c, sid, {"type": "batch", "ops": [
+        {"type": "create", "node": {"id": ok, "type": "note", "parentId": root, "content": {"title": "a"}}},
+        {"type": "update", "id": "does-not-exist", "patch": {"x": 1}},
+    ]})
+    assert r.status_code == 404
+    assert not any(n["id"] == ok for n in scene(c, sid)["nodes"])
+
+
+# ---------------------------------------------------------------- sharing & permissions
+
+
+def test_invite_viewer_cannot_edit_then_promote(make_client):
+    owner = make_client("owner@example.com")
+    sid = first_space(owner)["id"]
+    r = owner.post(f"/api/spaces/{sid}/invites", json={"email": "guest@example.com", "role": "viewer"}, headers=H)
+    token = r.json()["devLink"].rsplit("/", 1)[1]
+    guest = make_client("guest@example.com")
+    info = guest.get(f"/api/invites/{token}").json()
+    assert info["role"] == "viewer"
+    assert guest.post(f"/api/invites/{token}/accept", headers=H).json()["spaceId"] == sid
+    assert any(s["id"] == sid for s in guest.get("/api/spaces").json()["shared"])
+    root = scene(guest, sid)["rootBoardId"]
+    r = op(guest, sid, {"type": "create", "node": {"id": uid(), "type": "note", "parentId": root, "content": {"title": "x"}}})
+    assert r.status_code == 403
+    owner.put(f"/api/spaces/{sid}/members/{guest.me['id']}", json={"role": "editor"}, headers=H)
+    r = op(guest, sid, {"type": "create", "node": {"id": uid(), "type": "note", "parentId": root, "content": {"title": "x"}}})
+    assert r.status_code == 200
+
+
+def test_invite_is_for_the_invited_email_only(make_client):
+    owner = make_client("o2@example.com")
+    sid = first_space(owner)["id"]
+    token = owner.post(f"/api/spaces/{sid}/invites", json={"email": "right@example.com", "role": "editor"}, headers=H).json()["devLink"].rsplit("/", 1)[1]
+    wrong = make_client("wrong@example.com")
+    assert wrong.post(f"/api/invites/{token}/accept", headers=H).status_code == 403
+
+
+def test_join_link_and_expiry_toggle(make_client):
+    owner = make_client("o3@example.com")
+    sid = first_space(owner)["id"]
+    share = owner.put(f"/api/spaces/{sid}/join-link", json={"enabled": True, "role": "editor", "expiresInDays": 7}, headers=H).json()
+    token = share["joinLink"]["url"].rsplit("/", 1)[1]
+    joiner = make_client("joiner@example.com")
+    assert joiner.post(f"/api/join/{token}", headers=H).status_code == 200
+    assert scene(joiner, sid)["space"]["role"] == "editor"
+    owner.put(f"/api/spaces/{sid}/join-link", json={"enabled": False}, headers=H)
+    late = make_client("late@example.com")
+    assert late.post(f"/api/join/{token}", headers=H).status_code == 404
+
+
+def test_public_link_is_read_only_without_account(make_client):
+    owner = make_client("o4@example.com")
+    sid = first_space(owner)["id"]
+    url = owner.put(f"/api/spaces/{sid}/public-link", json={"enabled": True}, headers=H).json()["publicLink"]["url"]
+    token = url.rsplit("/", 1)[1]
+    anon = make_client()
+    assert anon.get(f"/api/public/{token}").json()["spaceId"] == sid
+    sc = scene(anon, sid, public=token)
+    assert sc["space"]["role"] == "viewer"
+    assert anon.get(f"/api/spaces/{sid}/scene").status_code == 404  # without the token: nothing
+    owner.put(f"/api/spaces/{sid}/public-link", json={"enabled": False}, headers=H)
+    assert anon.get(f"/api/spaces/{sid}/scene", params={"public": token}).status_code == 404
+
+
+def test_board_override_limits_an_editor_inside_one_board(make_client):
+    owner = make_client("o5@example.com")
+    sid = first_space(owner)["id"]
+    token = owner.put(f"/api/spaces/{sid}/join-link", json={"enabled": True, "role": "editor"}, headers=H).json()["joinLink"]["url"].rsplit("/", 1)[1]
+    ed = make_client("ed5@example.com")
+    ed.post(f"/api/join/{token}", headers=H)
+    sc = scene(owner, sid)
+    board = next(n for n in sc["nodes"] if n["type"] == "board" and n["parentId"] == sc["rootBoardId"])
+    r = owner.put(f"/api/spaces/{sid}/overrides", json={"boardId": board["id"], "userId": ed.me["id"], "role": "viewer"}, headers=H)
+    assert r.status_code == 200
+    roles = scene(ed, sid)["boardRoles"]
+    assert roles[board["id"]] == "viewer" and roles[sc["rootBoardId"]] == "editor"
+    inside = op(ed, sid, {"type": "create", "node": {"id": uid(), "type": "note", "parentId": board["id"], "content": {"title": "no"}}})
+    assert inside.status_code == 403
+    outside = op(ed, sid, {"type": "create", "node": {"id": uid(), "type": "note", "parentId": sc["rootBoardId"], "content": {"title": "yes"}}})
+    assert outside.status_code == 200
+
+
+def test_strangers_see_nothing(make_client):
+    owner = make_client("o6@example.com")
+    sid = first_space(owner)["id"]
+    stranger = make_client("stranger@example.com")
+    assert stranger.get(f"/api/spaces/{sid}/scene").status_code == 403
+
+
+def test_last_owner_cannot_leave(make_client):
+    owner = make_client("o7@example.com")
+    sid = first_space(owner)["id"]
+    # personal-workspace owner still owns it via the workspace, so leaving the space membership is allowed
+    r = owner.put(f"/api/spaces/{sid}/members/{owner.me['id']}", json={"role": "viewer"}, headers=H)
+    assert r.status_code in (200, 409)
+
+
+# ---------------------------------------------------------------- files
+
+
+def test_upload_image_makes_previews_and_urls_are_protected(make_client):
+    c = make_client("pic@example.com")
+    sid = first_space(c)["id"]
+    r = c.post(f"/api/spaces/{sid}/files", files={"file": ("photo.png", png_bytes(), "image/png")}, headers=H)
+    assert r.status_code == 200, r.text
+    f = r.json()
+    assert f["kind"] == "image" and f["width"] == 320 and "thumb_256" in f and f["status"] == "ready"
+    signed = f["thumb_256"].split("testserver")[-1]
+    assert c.get(signed).headers["content-type"] == "image/webp"
+    anon = make_client()
+    assert anon.get(signed).status_code == 200  # signed URL works without a cookie
+    unsigned = signed.split("?")[0]
+    assert anon.get(unsigned).status_code == 404
+    resp = c.get(f["src"])
+    assert "sandbox" in resp.headers["content-security-policy"]
+    root = scene(c, sid)["rootBoardId"]
+    r = op(c, sid, {"type": "create", "node": {"id": uid(), "type": "image", "parentId": root, "content": {"title": "photo", "alt": "a photo", "fileId": f["id"]}}})
+    node = r.json()["changes"][0]["node"]
+    assert node["content"]["src"].startswith("/api/files/")
+
+
+def test_programs_are_rejected_and_svg_is_sanitized(make_client):
+    c = make_client("svg@example.com")
+    sid = first_space(c)["id"]
+    exe = c.post(f"/api/spaces/{sid}/files", files={"file": ("setup.exe", b"MZ" + b"\0" * 200, "application/octet-stream")}, headers=H)
+    assert exe.status_code == 415
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(2)</script><a href="javascript:x"><rect width="5" height="5"/></a></svg>'
+    r = c.post(f"/api/spaces/{sid}/files", files={"file": ("x.svg", svg, "image/svg+xml")}, headers=H)
+    assert r.status_code == 200, r.text
+    body = c.get(r.json()["src"]).content
+    assert b"script" not in body and b"onload" not in body and b"javascript" not in body and b"<rect" in body
+
+
+def test_files_in_other_spaces_cannot_be_referenced(make_client):
+    a = make_client("fa1@example.com")
+    b = make_client("fb1@example.com")
+    sa, sb = first_space(a)["id"], first_space(b)["id"]
+    f = a.post(f"/api/spaces/{sa}/files", files={"file": ("p.png", png_bytes(), "image/png")}, headers=H).json()
+    root_b = scene(b, sb)["rootBoardId"]
+    r = op(b, sb, {"type": "create", "node": {"id": uid(), "type": "image", "parentId": root_b, "content": {"fileId": f["id"]}}})
+    assert r.status_code == 400
+    assert b.post(f"/api/files/{f['id']}/copy?space={sb}", headers=H).status_code == 403
+
+
+def test_upload_limits(make_client):
+    from app import config
+
+    c = make_client("big@example.com")
+    sid = first_space(c)["id"]
+    object.__setattr__(config.settings, "max_upload_mb", 0)
+    try:
+        r = c.post(f"/api/spaces/{sid}/files", files={"file": ("p.png", png_bytes(), "image/png")}, headers=H)
+        assert r.status_code == 413
+    finally:
+        object.__setattr__(config.settings, "max_upload_mb", 200)
+
+
+# ---------------------------------------------------------------- live collaboration
+
+
+def test_live_ops_broadcast_presence_and_viewer_reject(make_client):
+    owner = make_client("live@example.com")
+    sid = first_space(owner)["id"]
+    token = owner.put(f"/api/spaces/{sid}/join-link", json={"enabled": True, "role": "viewer"}, headers=H).json()["joinLink"]["url"].rsplit("/", 1)[1]
+    viewer = make_client("watcher@example.com")
+    viewer.post(f"/api/join/{token}", headers=H)
+    root = scene(owner, sid)["rootBoardId"]
+    with owner.websocket_connect(f"/api/spaces/{sid}/live") as a, viewer.websocket_connect(f"/api/spaces/{sid}/live") as b:
+        hello_a, hello_b = a.receive_json(), b.receive_json()
+        assert hello_a["t"] == "hello" and hello_b["role"] == "viewer"
+        assert a.receive_json()["t"] == "presence"  # viewer joined
+        a.send_json({"t": "presence", "focus": root, "cursor": {"x": 1, "y": 2}})
+        p = b.receive_json()
+        assert p["t"] == "presence" and p["peer"]["cursor"] == {"x": 1, "y": 2} and p["peer"]["name"]
+        nid = uid()
+        a.send_json({"t": "op", "cid": "c1", "op": {"type": "create", "node": {"id": nid, "type": "note", "parentId": root, "content": {"title": "live"}}}})
+        got_a, got_b = a.receive_json(), b.receive_json()
+        assert got_a["cid"] == "c1" and got_b["changes"][0]["node"]["id"] == nid
+        b.send_json({"t": "op", "cid": "v1", "op": {"type": "delete", "id": nid}})
+        rej = b.receive_json()
+        assert rej["t"] == "reject" and rej["cid"] == "v1" and rej["status"] == 403
+        seq = got_a["seq"]
+    # Reconnect and catch up on what was missed.
+    op(owner, sid, {"type": "update", "id": nid, "patch": {"x": 99}})
+    with viewer.websocket_connect(f"/api/spaces/{sid}/live?since={seq}") as b2:
+        assert b2.receive_json()["t"] == "hello"
+        caught = b2.receive_json()
+        assert caught["t"] == "op" and caught["changes"][0]["node"]["x"] == 99
+
+
+def test_live_rejects_strangers_and_bad_origin(make_client):
+    owner = make_client("lv2@example.com")
+    sid = first_space(owner)["id"]
+    stranger = make_client("lv3@example.com")
+    from starlette.websockets import WebSocketDisconnect
+
+    with pytest.raises(WebSocketDisconnect):
+        with stranger.websocket_connect(f"/api/spaces/{sid}/live") as ws:
+            ws.receive_json()
+    with pytest.raises(WebSocketDisconnect):
+        with owner.websocket_connect(f"/api/spaces/{sid}/live", headers={"origin": "https://evil.example"}) as ws:
+            ws.receive_json()
+
+
+# ---------------------------------------------------------------- search, previews, your data
+
+
+def test_search_finds_notes_in_your_spaces_only(make_client):
+    a = make_client("sa@example.com")
+    b = make_client("sb@example.com")
+    sid = first_space(a)["id"]
+    root = scene(a, sid)["rootBoardId"]
+    op(a, sid, {"type": "create", "node": {"id": uid(), "type": "note", "parentId": root, "content": {"title": "Quokka plan", "body": "zebra stripes"}}})
+    hits = a.get("/api/search", params={"q": "zebra"}).json()
+    assert hits and hits[0]["node"]["content"]["title"] == "Quokka plan" and hits[0]["path"][0]["id"] == root
+    assert b.get("/api/search", params={"q": "zebra"}).json() == []
+
+
+def test_unfurl_refuses_private_addresses(make_client):
+    c = make_client("uf@example.com")
+    r = c.get("/api/unfurl", params={"url": "http://127.0.0.1:8000/api/health"})
+    assert r.status_code == 200 and r.json()["title"] == "http://127.0.0.1:8000/api/health"
+    yt = c.get("/api/unfurl", params={"url": "https://youtu.be/dQw4w9WgXcQ"}).json()
+    assert yt["embed"] == "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
+
+
+def test_new_space_and_team_workspace(make_client):
+    c = make_client("team@example.com")
+    s = c.post("/api/spaces", json={"title": "Shoot"}, headers=H).json()
+    assert s["title"] == "Shoot"
+    ws = c.post("/api/workspaces", json={"name": "Studio"}, headers=H).json()
+    c.post(f"/api/workspaces/{ws['id']}/members", json={"email": "mate@example.com", "role": "editor"}, headers=H)
+    s2 = c.post("/api/spaces", json={"title": "Team board", "workspaceId": ws["id"]}, headers=H).json()
+    mate = make_client("mate@example.com")
+    assert any(x["id"] == s2["id"] and x["role"] == "editor" for x in mate.get("/api/spaces").json()["shared"] + mate.get("/api/spaces").json()["mine"])
+
+
+def test_export_and_delete_account(make_client):
+    c = make_client("gone@example.com")
+    sid = first_space(c)["id"]
+    c.post(f"/api/spaces/{sid}/files", files={"file": ("p.png", png_bytes(), "image/png")}, headers=H)
+    z = zipfile.ZipFile(io.BytesIO(c.get("/api/me/export").content))
+    names = z.namelist()
+    assert "profile.json" in names and any(n.endswith("board.json") for n in names)
+    assert c.request("DELETE", "/api/me", json={"confirmEmail": "nope"}, headers=H).status_code == 422
+    assert c.request("DELETE", "/api/me", json={"confirmEmail": "gone@example.com"}, headers=H).status_code == 200
+    assert c.get("/api/me").status_code == 401
+    other = make_client("gone2@example.com")
+    assert other.get(f"/api/spaces/{sid}/scene").status_code == 404

@@ -13,3 +13,6 @@ dist/
 .DS_Store
 .vscode/
 .idea/
+
+# Local development data (SQLite database, uploaded files)
+backend/data/
