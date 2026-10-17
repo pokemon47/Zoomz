@@ -95,12 +95,44 @@ def embed_for(url: str) -> Optional[str]:
     return None
 
 
+OEMBED = {
+    "youtube.com": "https://www.youtube.com/oembed?format=json&url={}",
+    "youtu.be": "https://www.youtube.com/oembed?format=json&url={}",
+    "vimeo.com": "https://vimeo.com/api/oembed.json?url={}",
+}
+
+
+def _oembed(url: str) -> Optional[dict[str, Any]]:
+    host = (urlparse(url).hostname or "").lower()
+    host = host[4:] if host.startswith("www.") else host
+    host = "youtube.com" if host == "m.youtube.com" else host
+    endpoint = OEMBED.get(host)
+    if not endpoint:
+        return None
+    try:
+        r = httpx.get(endpoint.format(quote(url, safe="")), timeout=6)
+        r.raise_for_status()
+        data = r.json()
+    except (httpx.HTTPError, ValueError):
+        return None
+    thumb = data.get("thumbnail_url")
+    return {
+        "title": str(data.get("title") or url)[:300],
+        "description": f"by {data['author_name']}"[:600] if data.get("author_name") else "",
+        "image": thumb if isinstance(thumb, str) and thumb.startswith("https://") else None,
+        "site": str(data.get("provider_name") or host)[:120],
+    }
+
+
 @router.get("/unfurl")
 def unfurl(url: str, request: Request, user: User = Depends(require_user)) -> dict:
     limit(request, "unfurl", 60, 20, key=user.id)
     if not re.match(r"^https?://", url) or len(url) > 2000:
         raise HTTPException(422, "Only http and https links can be previewed.")
     out: dict[str, Any] = {"url": url, "title": url, "description": "", "image": None, "site": urlparse(url).hostname or "", "embed": embed_for(url)}
+    known = _oembed(url)  # video sites describe themselves properly via oEmbed
+    if known:
+        return {**out, **known}
     try:
         current = url
         with httpx.Client(timeout=6, follow_redirects=False, headers={"User-Agent": "ZoomzBot/1.0 (+link preview)"}) as client:
@@ -117,8 +149,8 @@ def unfurl(url: str, request: Request, user: User = Depends(require_user)) -> di
                     body = b""
                     for chunk in r.iter_bytes():
                         body += chunk
-                        if len(body) > 400_000:
-                            break
+                        if b"</head>" in body[-len(chunk) - 8 :] or len(body) > 1_000_000:
+                            break  # metadata lives in <head>
                     html = body.decode(r.encoding or "utf-8", errors="replace")
                     break
             else:

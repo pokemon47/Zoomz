@@ -80,7 +80,8 @@ export class Space {
     if (!n || n.parentId === parentId) return
     if (n.parentId) {
       const list = this.index.children.get(n.parentId)
-      if (list) list.splice(list.indexOf(n), 1)
+      const i = list ? list.indexOf(n) : -1
+      if (list && i >= 0) list.splice(i, 1)
     }
     const moved = { ...n, parentId } as SceneNode
     this.index.byId.set(id, moved)
@@ -89,7 +90,11 @@ export class Space {
     this.index.children.set(parentId, list)
   }
 
-  addNode(n: SceneNode) {
+  addNode(n: SceneNode): void {
+    if (this.index.byId.has(n.id)) {
+      this.upsert(n)
+      return
+    }
     this.index.byId.set(n.id, n)
     if (n.parentId) {
       const list = this.index.children.get(n.parentId) ?? []
@@ -111,7 +116,8 @@ export class Space {
       this.pos.delete(node.id)
     }
     const list = this.index.children.get(n.parentId)
-    if (list) list.splice(list.indexOf(n), 1)
+    const i = list ? list.indexOf(n) : -1
+    if (list && i >= 0) list.splice(i, 1)
     drop(n)
     return removed
   }
@@ -122,7 +128,11 @@ export class Space {
     if (!old) return
     this.index.byId.set(n.id, n)
     const list = old.parentId ? this.index.children.get(old.parentId) : undefined
-    if (list) list[list.indexOf(old)] = n
+    if (list) {
+      const i = list.indexOf(old)
+      if (i >= 0) list[i] = n
+    }
+    if (n.type === "board" && (old.w !== n.w || old.h !== n.h)) this.invalidate(n.id)
   }
 
   setPos(id: string, x: number, y: number) {
@@ -139,11 +149,61 @@ export class Space {
   boundsOf(boardId: string): Rect {
     let b = this.bounds.get(boardId)
     if (!b) {
-      // Bounds use the fixture layout, not live drags, so moving a card never rescales the board.
-      b = contentBounds(this.index, boardId)
+      // A board's content window is stored on the board (`content.frame`), so adding or moving
+      // cards never rescales it. Older data without a frame falls back to its children's bounds.
+      const node = this.index.byId.get(boardId)
+      const frame = node?.type === "board" ? node.content.frame : undefined
+      b = frame ? { ...frame } : contentBounds(this.index, boardId)
       this.bounds.set(boardId, b)
     }
     return b
+  }
+
+  /** Insert or replace a node from the server (or an undo), keeping the tree consistent. */
+  upsert(n: SceneNode): void {
+    const old = this.index.byId.get(n.id)
+    if (!old) {
+      this.addNode(n)
+      return
+    }
+    if (old.parentId !== n.parentId) {
+      this.setParent(n.id, n.parentId!)
+    }
+    this.updateNode(n)
+    this.pos.delete(n.id)
+    if (n.type === "board") this.invalidate(n.id)
+  }
+
+  /** Drop cached frames for a board (its size or frame changed). */
+  invalidate(boardId: string) {
+    this.frames.delete(boardId)
+    this.bounds.delete(boardId)
+  }
+
+  /** Replace everything (after a resync), keeping this object so the camera's references hold. */
+  reset(nodes: SceneNode[]) {
+    this.index.byId.clear()
+    this.index.children.clear()
+    for (const n of nodes) {
+      this.index.byId.set(n.id, n)
+      if (n.parentId) {
+        const list = this.index.children.get(n.parentId) ?? []
+        list.push(n)
+        this.index.children.set(n.parentId, list)
+      }
+    }
+    this.frames.clear()
+    this.bounds.clear()
+    this.pos.clear()
+  }
+
+  /** Clear an in-progress drag position. */
+  clearPos(id: string) {
+    this.pos.delete(id)
+  }
+
+  hasPos(id: string): boolean {
+    return this.pos.has(id)
   }
 
   /** Mapping from a (non-root) board's local space onto its card face in the parent. */

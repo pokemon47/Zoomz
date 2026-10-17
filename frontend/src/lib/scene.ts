@@ -57,3 +57,9 @@ export function boundsOf(nodes: { x: number; y: number; w: number; h: number }[]
   }
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
 }
+
+/** Display title for any node (links may only have a URL). */
+export function titleOf(n: SceneNode): string {
+  if (n.type === "link") return n.content.title || n.content.site || n.content.url
+  return n.content.title
+}

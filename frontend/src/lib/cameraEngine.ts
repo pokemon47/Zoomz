@@ -139,6 +139,20 @@ export class CameraEngine {
     this.track()
   }
 
+  /** Glide toward a camera (following someone's view): no flight, just the smooth follow. */
+  glideTo(cam: Cam) {
+    this.flight = null
+    this.target = this.space.normalize(cam, this.vp)
+    if (this.reduced) this.jumpTo(cam)
+  }
+
+  /** Zoom the displayed camera right now about a point (direct manipulation, e.g. pinch). */
+  zoomNow(px: number, py: number, factor: number) {
+    const d = this.display
+    const zoomed = { b: d.b, s: d.s * factor, x: px - (px - d.x) * factor, y: py - (py - d.y) * factor }
+    this.jumpTo(this.space.clampScale(this.space.normalize(zoomed, this.vp), this.vp))
+  }
+
   stop() {
     this.flight = null
     this.target = this.display

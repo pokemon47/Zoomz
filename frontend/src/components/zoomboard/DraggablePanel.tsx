@@ -15,7 +15,7 @@ type Props = {
   children: ReactNode
 }
 
-const KEY = (id: string) => `zoomz.panel.${id}`
+const KEY = (id: string) => `zoomz.panel.v2.${id}`
 const load = (id: string, fallback: Pos): Pos => {
   try {
     const v = JSON.parse(localStorage.getItem(KEY(id)) ?? "null") as Pos | null

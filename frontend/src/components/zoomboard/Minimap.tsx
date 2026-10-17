@@ -1,6 +1,7 @@
 import { useRef, useState, type PointerEvent } from "react"
 import { DEPTH_DOT, floorFor } from "@/lib/constants"
 import { fileKind } from "@/lib/files"
+import { titleOf } from "@/lib/scene"
 import type { Cam, Space, Viewport } from "@/lib/space"
 
 type Props = {
@@ -75,14 +76,14 @@ export function Minimap({ space, focus, cam, vp, onCenter }: Props) {
   for (let id: string | null = focus; id; id = space.parentOf(id)) path.unshift(id)
 
   return (
-    <div className="zb-minimap" aria-label={`Map of ${board?.content.title}`}>
+    <div className="zb-minimap" aria-label={`Map of ${board ? titleOf(board) : "the board"}`}>
       <div className="zb-minimap-head">
         <span className="zb-minimap-trail" aria-hidden>
           {path.map((id, i) => (
             <span key={id} className="zb-dot" style={{ ["--d" as string]: DEPTH_DOT[Math.min(i, 3)], width: i === path.length - 1 ? 12 : 8, height: i === path.length - 1 ? 12 : 8 }} />
           ))}
         </span>
-        <span className="zb-minimap-title">{board?.content.title}</span>
+        <span className="zb-minimap-title">{board ? titleOf(board) : ""}</span>
         <span className="zb-meta">L{depth + 1}</span>
       </div>
       <div className="zb-minimap-well" style={{ background: floorFor(depth) }}>
@@ -120,7 +121,8 @@ export function Minimap({ space, focus, cam, vp, onCenter }: Props) {
             if (n.type === "image")
               return <image key={n.id} href={n.content.src} x={p.x} y={p.y} width={n.w} height={n.h} preserveAspectRatio="xMidYMid slice" />
             if (n.type === "note") return <rect key={n.id} x={p.x} y={p.y} width={n.w} height={n.h} rx={r} fill="var(--lemon)" />
-            return <rect key={n.id} x={p.x} y={p.y} width={n.w} height={n.h} rx={r} fill={TONE[fileKind(n.content.mime, n.content.title).tone] ?? "var(--lemon)"} />
+            if (n.type === "link") return <rect key={n.id} x={p.x} y={p.y} width={n.w} height={n.h} rx={r} fill="var(--cobalt)" />
+            return <rect key={n.id} x={p.x} y={p.y} width={n.w} height={n.h} rx={r} fill={TONE[fileKind(n.content.mime ?? "", n.content.title).tone] ?? "var(--lemon)"} />
           })}
           <g clipPath={`url(#mm-${focus})`}>
             <rect className="zb-minimap-view" x={view.x} y={view.y} width={view.w} height={view.h} rx={Math.min(view.w, view.h) * 0.04} vectorEffect="non-scaling-stroke" />
