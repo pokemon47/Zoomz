@@ -39,7 +39,7 @@ import { pathTo, titleOf } from "@/lib/scene"
 import { SCENERY, themeById, type SceneryId } from "@/lib/scenery"
 import { layout, lift, localFromScreen, sortByLayer, type Cam, type Layout, type Placed, type Space, type Viewport } from "@/lib/space"
 import { layerOps, topRank, type LayerMove } from "@/lib/layers"
-import { imageCard, newId, type Op, type SceneStore } from "@/lib/store"
+import { IMAGE_MAT, imageCard, imageCardHeight, newId, type Op, type SceneStore } from "@/lib/store"
 import type { SceneNode } from "@/lib/types"
 import { ContextMenu, type ContextAction } from "./ContextMenu"
 import { Lightbox } from "./Lightbox"
@@ -394,6 +394,26 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
     store.setPresence({ focus: lay.focus, view: viewRect, cursor, path: path.map((p) => p.id) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presenceKey])
+
+  // ---------- pictures keep their true shape ----------
+  // Cards made before the shape was exact (or sized before the file could be read) are
+  // corrected the first time their picture loads, for everyone, by whoever can edit them.
+  useEffect(() => {
+    const el = viewportRef.current
+    if (!el) return
+    const onLoad = (e: Event) => {
+      const img = e.target
+      if (!(img instanceof HTMLImageElement) || !img.classList.contains("zb-ph") || !img.naturalWidth) return
+      const id = img.closest("[data-item]")?.getAttribute("data-item")
+      const n = id ? space.node(id) : undefined
+      if (!n || n.type !== "image" || (n.content as { status?: string }).status === "uploading") return
+      if (store.readOnly || !store.canEdit(n.parentId!)) return
+      const h = imageCardHeight(n.w, img.naturalHeight / img.naturalWidth)
+      if (Math.abs(h - n.h) > 2) store.commit({ type: "update", id: n.id, patch: { h } }, "fit picture", { undoable: false })
+    }
+    el.addEventListener("load", onLoad, true)
+    return () => el.removeEventListener("load", onLoad, true)
+  }, [space, store])
 
   // ---------- adding things ----------
   const spawn = useCallback(
@@ -845,7 +865,8 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       if (!store.canEdit(p.orig.parentId)) return
       let w = Math.max(80, p.w + (e.clientX - p.sx) / p.scale)
       let h = Math.max(70, p.h + (e.clientY - p.sy) / p.scale)
-      if (p.keepAspect && !e.shiftKey) h = (w * p.h) / p.w
+      // Pictures always keep their true shape: the mat stays even and nothing is cropped.
+      if (p.keepAspect) h = imageCardHeight(w, (p.h - IMAGE_MAT * 2) / Math.max(1, p.w - IMAGE_MAT * 2))
       if (p.orig.type === "board") {
         w = Math.max(220, w)
         h = Math.max(200, h)

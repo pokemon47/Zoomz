@@ -303,7 +303,7 @@ export class SceneStore {
           const p = this.space.at(cur)
           const content = { ...cur.content, ...stored, fileId: stored.id, src: (stored.src as string) ?? blob }
           const sw = Number(stored.width), sh = Number(stored.height)
-          const size = isImage && !Number.isFinite(ratio) && sw > 0 && sh > 0 ? { w: cur.w, h: imageCard(sh / sw, cur.w, Infinity).h } : {}
+          const size = isImage && !Number.isFinite(ratio) && sw > 0 && sh > 0 ? { w: cur.w, h: imageCardHeight(cur.w, sh / sw) } : {}
           delete (content as Record<string, unknown>).progress
           delete (content as Record<string, unknown>).id
           delete (content as Record<string, unknown>).filename
@@ -540,11 +540,20 @@ function sendable(op: Op): Op {
   return { type: "create", node: { ...op.node, content } as SceneNode }
 }
 
-/** Image card size for a picture of shape `ratio` (h / w): a 16px mat plus a 36px caption strip. */
+/** The thin, even border of mat around a picture, in card units. */
+export const IMAGE_MAT = 6
+
+/** Image card size for a picture of shape `ratio` (h / w): the picture plus an even mat. */
 export function imageCard(ratio: number, maxW = 220, maxH = 420): { w: number; h: number } {
   const r = Number.isFinite(ratio) ? ratio : 1.25
-  const w = Math.max(60, Math.min(maxW, Math.round(16 + (maxH - 52) / r)))
-  return { w, h: Math.round(16 + (w - 16) * r + 36) }
+  const m = IMAGE_MAT * 2
+  const w = Math.max(60, Math.min(maxW, Math.round(m + (maxH - m) / r)))
+  return { w, h: Math.round(m + (w - m) * r) }
+}
+
+/** The card height that fits a picture of `ratio` at this card width. */
+export function imageCardHeight(w: number, ratio: number): number {
+  return Math.round(IMAGE_MAT * 2 + (w - IMAGE_MAT * 2) * ratio)
 }
 
 export function imageRatio(src: string): Promise<number> {

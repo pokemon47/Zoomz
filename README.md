@@ -78,7 +78,7 @@ GitHub Actions runs SQLite tests, PostgreSQL migrations and tests, frontend chec
 | Edit text | Double-click a note, or a board's title strip (Enter also edits a focused note) |
 | Move | Drag. Dropping onto another board moves the card *into* it, at that level's size |
 | Move a board | Drag its title strip (small boards: drag anywhere) |
-| Resize | Select one card and drag the blue corner grip (images keep their shape; Shift frees it) |
+| Resize | Select one card and drag the blue corner grip (pictures always keep their true shape) |
 | Select several | Shift-click, or Shift-drag on the floor for a marquee; ⌘A selects everything on this board |
 | Copy / cut / paste / duplicate | ⌘C / ⌘X / ⌘V / ⌘D. This works across boards and spaces; files are copied along |
 | Delete | Delete or Backspace |
