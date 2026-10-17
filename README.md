@@ -61,7 +61,7 @@ Optional local extras: `ffmpeg` on your PATH enables video posters and transcode
 | --- | --- |
 | Add images, videos, PDFs, any file | Drop them on any board, paste with ⌘V, or **Add → Images & files…** (upload progress is shown on the card) |
 | Add a link | Paste a URL. Links get a preview; YouTube, Vimeo and Figma play in place up close |
-| New note / board | **Add**, or `N` / `B`. Pasting plain text also makes a note |
+| New note / board | **Add**, or `N` / `B`. Pasting plain text also makes a note. Notes have no length limit: the text sizes itself to fill the note (a few words are big, a long note is small) and stays readable in the lightbox |
 | Edit text | Double-click a note, or a board's title strip (Enter also edits a focused note) |
 | Move | Drag. Dropping onto another board moves the card *into* it, at that level's size |
 | Move a board | Drag its title strip (small boards: drag anywhere) |

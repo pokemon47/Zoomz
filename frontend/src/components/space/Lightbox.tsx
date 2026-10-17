@@ -2,6 +2,7 @@ import { motion, useReducedMotion, type Transition } from "motion/react"
 import { ExternalLink, Pencil, X } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { fileKind, formatBytes } from "@/lib/files"
+import { fitFontSize } from "@/lib/fitText"
 import { titleOf } from "@/lib/scene"
 import type { SceneNode } from "@/lib/types"
 
@@ -128,7 +129,7 @@ export function Lightbox({ node, getRect, canEdit, onEdit, onClosed }: Props) {
           {...cardMotion}
           onAnimationComplete={finish}
         >
-          <Held node={node} bar={size.bar} />
+          <Held node={node} bar={size.bar} w={size.w} h={size.h} />
           <div className="zb-held-actions">
             {canEdit && node.type !== "board" && (
               <button type="button" className="zb-ibtn zb-ibtn-sm" aria-label="Edit title and caption" title="Edit" onClick={() => {
@@ -148,12 +149,17 @@ export function Lightbox({ node, getRect, canEdit, onEdit, onClosed }: Props) {
   )
 }
 
-function Held({ node: n, bar }: { node: SceneNode; bar: boolean }) {
+function Held({ node: n, bar, w, h }: { node: SceneNode; bar: boolean; w: number; h: number }) {
   if (n.type === "note") {
+    // Same fitting as on the board, but held up close it never drops below a readable size;
+    // a very long note scrolls instead.
+    const size = fitFontSize(n.content.title, n.content.body, w - 80, h - 80, { min: 15, max: 360 })
     return (
       <div className="zb-held-notebody">
-        <h2>{n.content.title}</h2>
-        <p>{n.content.body}</p>
+        <div className="zb-note-text" style={{ fontSize: size }}>
+          <div className="zb-note-title">{n.content.title}</div>
+          {n.content.body && <div className="zb-note-body">{n.content.body}</div>}
+        </div>
       </div>
     )
   }

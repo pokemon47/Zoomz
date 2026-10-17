@@ -32,7 +32,8 @@ export function Marquee({ rect }: { rect: { x: number; y: number; w: number; h: 
   return <div className="zb-marquee" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }} aria-hidden />
 }
 
-export type EditField = { key: string; label: string; value: string; multiline?: boolean; max: number; placeholder?: string }
+/** `max` is a length limit; notes have none (their text shrinks to fit). */
+export type EditField = { key: string; label: string; value: string; multiline?: boolean; max?: number; placeholder?: string }
 
 export type EditTarget = {
   id: string
@@ -52,7 +53,7 @@ export function editFields(n: SceneNode): EditField[] {
     case "note":
       return [
         { key: "title", label: "Title", value: s("title"), max: 120 },
-        { key: "body", label: "Note", value: s("body"), multiline: true, max: 4000 },
+        { key: "body", label: "Note", value: s("body"), multiline: true },
       ]
     case "board":
       return [

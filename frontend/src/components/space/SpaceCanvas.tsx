@@ -626,7 +626,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       if (clip) return void paste(clip)
       if (isUrl(text)) return void addLink(text)
       const [first, ...rest] = text.split(/\n+/)
-      createNode("note", first.slice(0, 60), (rest.join("\n") || (first.length > 60 ? first : "")).slice(0, 4000))
+      createNode("note", first.slice(0, 60), rest.join("\n") || (first.length > 60 ? first : ""))
     }
     document.addEventListener("paste", onPaste)
     return () => document.removeEventListener("paste", onPaste)
@@ -1269,7 +1269,7 @@ function pick(c: { src: string; thumb_256?: string; thumb_1024?: string }, scree
 function renderCard(n: SceneNode, placed: Placed, space: Space, tactile: Tactile, selected: boolean, reduced: boolean, lod: Placed["lod"], dropTarget: boolean, screenW: number) {
   const progress = (n.content as { progress?: number; status?: string }).status === "uploading" ? ((n.content as { progress?: number }).progress ?? 0) : undefined
   if (n.type === "image") return <ImageCard title={n.content.title} alt={n.content.alt} src={pick(n.content, screenW)} lod={lod} selected={selected} tactile={tactile} reduced={reduced} progress={progress} />
-  if (n.type === "note") return <NoteCard title={n.content.title} body={n.content.body} lod={lod} selected={selected} tactile={tactile} reduced={reduced} />
+  if (n.type === "note") return <NoteCard title={n.content.title} body={n.content.body} w={n.w} h={n.h} lod={lod} selected={selected} tactile={tactile} reduced={reduced} />
   if (n.type === "file")
     return (
       <FileCard

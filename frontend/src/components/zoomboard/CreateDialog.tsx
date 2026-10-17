@@ -41,7 +41,7 @@ function DialogBody({ kind, where, onClose, onCreate }: Props & { kind: CreateKi
         </label>
         <label className="zb-field">
           <span>{kind === "note" ? "Note" : "Description (optional)"}</span>
-          <textarea value={body} rows={kind === "note" ? 4 : 2} maxLength={280} onChange={(e) => setBody(e.target.value)} placeholder={kind === "note" ? "Keep it short — under 40 words reads best." : "What goes in here?"} />
+          <textarea value={body} rows={kind === "note" ? 5 : 2} maxLength={kind === "note" ? undefined : 600} onChange={(e) => setBody(e.target.value)} placeholder={kind === "note" ? "Write as much as you like — the text sizes itself to fit the note." : "What goes in here?"} />
         </label>
         <DialogFooter className="zb-dialog-footer">
           <Button variant="ghost" size="sm" onClick={onClose}>

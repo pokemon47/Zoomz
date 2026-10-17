@@ -388,3 +388,14 @@ def test_stacking_rank_round_trips(make_client):
     op(c, sid, {"type": "update", "id": nid, "patch": {"rank": -2.5}})
     assert next(n for n in scene(c, sid)["nodes"] if n["id"] == nid)["rank"] == -2.5
     assert op(c, sid, {"type": "update", "id": nid, "patch": {"rank": "high"}}).status_code == 400
+
+
+def test_notes_have_no_practical_length_limit(make_client):
+    c = make_client("longnote@example.com")
+    sid = first_space(c)["id"]
+    root = scene(c, sid)["rootBoardId"]
+    body = "word " * 12_000  # ~60,000 characters
+    nid = uid()
+    r = op(c, sid, {"type": "create", "node": {"id": nid, "type": "note", "parentId": root, "content": {"title": "Long", "body": body}}})
+    assert r.status_code == 200
+    assert len(r.json()["changes"][0]["node"]["content"]["body"]) == len(body)

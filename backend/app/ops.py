@@ -29,7 +29,9 @@ MAX_BATCH = 500
 CONTENT_FIELDS: dict[str, dict[str, int]] = {
     "board": {"title": 120, "description": 600},
     "image": {"title": 160, "alt": 600, "fileId": 32, "src": 300},
-    "note": {"title": 120, "body": 4000},
+    # Notes have no practical length limit (the text shrinks to fit the note); this cap only
+    # stops abuse — about 15,000 words.
+    "note": {"title": 120, "body": 100_000},
     "file": {"title": 255, "fileId": 32},
     "link": {"url": 2000, "title": 300, "description": 600, "image": 2000, "site": 120, "embed": 2000},
 }
