@@ -81,7 +81,7 @@ Optional local extras: `ffmpeg` on your PATH enables video posters and transcode
 - **Per-board access:** give a member a different role inside one board and everything in it. For example, someone can edit the whole space but only view the "Final picks" board.
 - **Team workspaces:** members see every board in the workspace with their workspace role. A person's role is the higher of their workspace role and their board-space role.
 
-**Your account** (Settings): change your name and cursor colour, download all your data as a zip, or delete your account along with everything in the workspaces you created.
+**Your account** (Settings): change your name and cursor colour, choose **Light**, **Dark** or **System** appearance (remembered per browser, applied before the page paints), download all your data as a zip, or delete your account along with everything in the workspaces you created.
 
 ## Checks
 

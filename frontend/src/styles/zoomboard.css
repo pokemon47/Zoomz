@@ -160,6 +160,8 @@
   pointer-events: none;
   background: radial-gradient(ellipse 70% 60% at 45% 35%, rgba(255, 255, 255, 0.55), transparent 70%);
 }
+/* dark theme (set by the theme toggle, or by the system when no choice is saved) */
+:root.dark .zb-viewport::before { background: radial-gradient(ellipse 70% 60% at 45% 35%, rgba(255, 255, 255, 0.05), transparent 70%); }
 @media (prefers-color-scheme: dark) {
   :root:not(.light):not([data-theme="light"]) .zb-viewport::before {
     background: radial-gradient(ellipse 70% 60% at 45% 35%, rgba(255, 255, 255, 0.05), transparent 70%);
@@ -326,6 +328,7 @@
   z-index: 40000;
   background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 60%, rgba(120, 90, 60, 0.10));
 }
+:root.dark .zb-vignette { background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.35)); }
 @media (prefers-color-scheme: dark) {
   :root:not(.light):not([data-theme="light"]) .zb-vignette {
     background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.35));
@@ -812,3 +815,11 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
 .zb-inner-titles { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .zb-inner-caption { font: 500 11px/1.2 var(--zb-sans); color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .zb-board.zb-far .zb-inner-titles { overflow: visible; }
+
+/* segmented control (appearance) */
+.zb-segmented { display: inline-flex; gap: 4px; padding: 5px; border-radius: 999px; background: var(--surface-sunk); box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.07); }
+.zb-segment { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border: 0; border-radius: 999px; background: none; color: var(--ink-muted); font: 700 14px/1 var(--zb-sans); cursor: pointer; transition: background 160ms ease-out, color 160ms ease-out, box-shadow 220ms var(--zb-spring), transform 220ms var(--zb-spring); }
+.zb-segment:hover { color: var(--ink); }
+.zb-segment[aria-checked="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 3px 0 0 var(--surface-side), 0 6px 12px -6px var(--cast); transform: translateY(-1px); }
+.zb-segment:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .zb-segment { transition: none; } }
