@@ -1,0 +1,161 @@
+# https://zenith.hosting/developers
+
+x-zenith:
+  catalog:
+    name: Zoomz
+  expose:
+    - service: web
+      port: 8080
+      web: true
+  storage:
+    postgres-data:
+      volume: zoomz-postgres
+      label: Database
+      description: Accounts, boards, notes, sharing and the edit history.
+      default_size: 5Gi
+    files:
+      volume: zoomz-files
+      label: Uploaded files
+      description: Images, videos and documents people add to boards, with their previews.
+      default_size: 20Gi
+    backups:
+      volume: zoomz-backups
+      label: Database backups
+      description: Nightly compressed database dumps (the last 14 are kept).
+      default_size: 5Gi
+  env:
+    PUBLIC_URL:
+      alias: ZENITH_PUBLIC_URL
+      services: [api]
+    SECRET_KEY:
+      generate: '([A-Za-z0-9]{24})([A-Za-z0-9]{24})'
+      services: [api]
+    POSTGRES_PASSWORD:
+      generate: '([A-Za-z0-9]{16})([A-Za-z0-9]{16})'
+      services: [postgres, backup]
+    PGPASSWORD:
+      template: '{POSTGRES_PASSWORD}'
+      services: [backup]
+    DATABASE_URL:
+      template: postgresql+psycopg://zoomz:{POSTGRES_PASSWORD}@postgres:5432/zoomz
+      services: [api]
+    SMTP_HOST:
+      input:
+        label: SMTP server
+        description: Mail server for sign-in links and invites, e.g. smtp.postmarkapp.com. Without it nobody can sign in by email.
+        required: true
+      services: [api]
+    SMTP_PORT:
+      input:
+        label: SMTP port
+        description: 587 (STARTTLS) or 465 (TLS).
+        default: '587'
+        required: true
+      services: [api]
+    SMTP_USER:
+      input:
+        label: SMTP username
+        description: Username for the mail server.
+        required: false
+      services: [api]
+    SMTP_PASSWORD:
+      input:
+        label: SMTP password
+        description: Password or API token for the mail server.
+        required: false
+      services: [api]
+    SMTP_FROM:
+      input:
+        label: From address
+        description: Who sign-in emails come from, e.g. Zoomz <hello@yourdomain.com>.
+        required: true
+      services: [api]
+    GOOGLE_CLIENT_ID:
+      input:
+        label: Google OAuth client ID
+        description: Optional. Enables "Continue with Google". Redirect URI is <your URL>/api/auth/google/callback.
+        required: false
+      services: [api]
+    GOOGLE_CLIENT_SECRET:
+      input:
+        label: Google OAuth client secret
+        description: Optional, pairs with the client ID.
+        required: false
+      services: [api]
+    SENTRY_DSN:
+      input:
+        label: Sentry DSN
+        description: Optional error monitoring.
+        required: false
+      services: [api]
+    MAX_UPLOAD_MB:
+      input:
+        label: Largest upload (MB)
+        description: Per file.
+        default: '200'
+        required: true
+      services: [api]
+    SPACE_QUOTA_MB:
+      input:
+        label: Storage per board (MB)
+        description: Total uploads allowed in one board.
+        default: '5120'
+        required: true
+      services: [api]
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: zoomz
+      POSTGRES_DB: zoomz
+    volumes:
+      - zoomz-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U zoomz -d zoomz]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  api:
+    image: ghcr.io/pokemon47/zoomz-api:main
+    environment:
+      APP_ENV: production
+      STORAGE_DIR: /data/files
+    volumes:
+      - zoomz-files:/data/files
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    image: ghcr.io/pokemon47/zoomz-web:main
+    depends_on:
+      api:
+        condition: service_started
+
+  backup:
+    image: postgres:17-alpine
+    environment:
+      PGHOST: postgres
+      PGUSER: zoomz
+      PGDATABASE: zoomz
+    volumes:
+      - zoomz-backups:/backups
+    entrypoint: [sh, -c]
+    command:
+      - |
+        until pg_isready -q; do sleep 5; done
+        while true; do
+          date -u +/backups/zoomz-%Y%m%d-%H%M.dump | xargs pg_dump --format=custom --file && echo "backup ok"
+          ls -1t /backups/zoomz-*.dump | tail -n +15 | xargs -r rm -f
+          sleep 86400
+        done
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  zoomz-postgres:
+  zoomz-files:
+  zoomz-backups:

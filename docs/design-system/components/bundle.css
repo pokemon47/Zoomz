@@ -1,0 +1,75 @@
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@600&display=swap");
+:root{--zb-disp:"Bricolage Grotesque","Arial Black",system-ui,sans-serif;--zb-sans:"DM Sans",system-ui,sans-serif;--zb-mono:"JetBrains Mono",ui-monospace,monospace;--side:var(--surface-side);--face:var(--surface);
+--glow:var(--cast);
+--zb-l1:0 3px 0 0 var(--side),0 8px 14px -6px var(--glow);
+--zb-l2:0 8px 0 0 var(--side),0 20px 30px -12px var(--glow);
+--zb-l3:0 12px 0 0 var(--side),0 36px 44px -16px var(--glow);
+--zb-press:0 2px 0 0 var(--side),0 4px 8px -4px var(--glow);
+--zb-spring:cubic-bezier(.34,1.56,.64,1)}
+body{margin:0;font-family:var(--zb-sans);background:var(--canvas);color:var(--ink)}
+/* the floor: soft isometric grid + light pool, so objects sit IN a space */
+.zb-stage{padding:var(--space-8) var(--space-6);min-height:100%;box-sizing:border-box;display:flex;gap:var(--space-8);align-items:flex-start;flex-wrap:wrap;perspective:1200px;
+background-color:var(--canvas);background-image:radial-gradient(var(--canvas-dot) 1.6px,transparent 1.8px);background-size:24px 24px}
+/* colour objects: each sets its face + side */
+.zb-tomato,.zb-btn-primary{--face:var(--tomato);--side:var(--tomato-side);--glow:rgba(255,142,114,.45)}.zb-cobalt,.zb-btn-cobalt{--face:var(--cobalt);--side:var(--cobalt-side);--glow:rgba(110,139,255,.45)}.zb-lemon,.zb-note{--face:var(--lemon);--side:var(--lemon-side);--glow:rgba(255,190,70,.45)}.zb-mint{--face:var(--mint);--side:var(--mint-side);--glow:rgba(114,217,169,.45)}.zb-lilac{--face:var(--lilac);--side:var(--lilac-side);--glow:rgba(199,174,255,.5)}
+/* puffy face: a top-lit dome over the solid colour (light from above, like the references) */
+.zb-btn,.zb-ibtn,.zb-card,.zb-zoom,.zb-crumbs,.zb-badge,.zb-panel,.zb-blob{background:linear-gradient(180deg,transparent 60%,rgba(0,0,0,.03)),var(--face)}
+.zb-btn{font:700 15px/1 var(--zb-sans);height:46px;padding:0 var(--space-6);border-radius:var(--radius-full);border:0;color:var(--ink);box-shadow:var(--zb-l2);cursor:pointer;display:inline-flex;align-items:center;gap:var(--space-2);transition:transform 220ms var(--zb-spring),box-shadow 220ms var(--zb-spring)}
+.zb-btn:hover{transform:translateY(-2px);box-shadow:0 10px 0 0 var(--side),0 26px 32px -14px var(--glow)}
+.zb-btn:active{transform:translateY(5px);box-shadow:var(--zb-press);transition-duration:70ms}
+.zb-btn-primary{color:#17131F}
+.zb-btn-cobalt{color:var(--on-cobalt)}
+.zb-btn-ghost{background:transparent;box-shadow:none}
+.zb-btn-ghost:hover{background:var(--surface-sunk);box-shadow:none;transform:none}
+.zb-btn-sm{height:34px;font-size:13px;padding:0 var(--space-4);box-shadow:var(--zb-l1)}
+.zb-btn-sm:active{transform:translateY(2px)}
+.zb-btn:focus-visible,.zb-ibtn:focus-visible,.zb-card:focus-visible,.zb-crumb:focus-visible{outline:3px solid var(--cobalt);outline-offset:4px}
+.zb-ibtn{width:42px;height:42px;border:0;border-radius:var(--radius-full);color:var(--ink);box-shadow:var(--zb-l1);display:inline-grid;place-items:center;cursor:pointer;font:700 20px/1 var(--zb-sans);transition:transform 200ms var(--zb-spring),box-shadow 200ms var(--zb-spring)}
+.zb-ibtn:hover{transform:translateY(-1px)}
+.zb-ibtn:active{transform:translateY(3px);box-shadow:var(--zb-press);transition-duration:70ms}
+/* chrome floats: rounded slabs hovering over the floor */
+.zb-zoom{display:inline-flex;align-items:center;gap:var(--space-2);padding:6px;border-radius:var(--radius-full);box-shadow:var(--zb-l2)}
+.zb-zoom .zb-ibtn{width:36px;height:36px;background:var(--surface-sunk);box-shadow:inset 0 -2px 0 rgba(0,0,0,.06)}
+.zb-readout{font:600 13px/16px var(--zb-mono);min-width:52px;text-align:center;padding:8px;border-radius:var(--radius-full);background:var(--surface-sunk);box-shadow:inset 0 2px 3px rgba(0,0,0,.08)}
+.zb-zoom .zb-btn{height:36px;box-shadow:none;background:transparent;padding:0 var(--space-3)}
+.zb-crumbs{display:inline-flex;align-items:center;gap:var(--space-1);padding:6px var(--space-2) 6px 6px;border-radius:var(--radius-full);box-shadow:var(--zb-l2);font:600 14px/1 var(--zb-sans)}
+.zb-crumb{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border-radius:var(--radius-full);color:var(--ink-muted);background:none;border:0;font:inherit;cursor:pointer}
+.zb-crumb:hover{background:var(--surface-sunk);color:var(--ink)}
+.zb-crumb[aria-current]{color:var(--ink);background:var(--surface-sunk);box-shadow:inset 0 2px 3px rgba(0,0,0,.07)}
+/* level dot = a tiny glossy marble */
+.zb-dot{width:12px;height:12px;border-radius:50%;background:var(--d);box-shadow:0 3px 8px -1px var(--d)}
+.zb-sep{color:var(--ink-muted);opacity:.6;font-weight:700}
+/* cards are slabs; hover tilts them toward the camera */
+.zb-card{position:relative;border-radius:var(--radius-md);box-shadow:var(--zb-l2);cursor:grab;box-sizing:border-box;transform-style:preserve-3d;transition:transform 320ms var(--zb-spring),box-shadow 320ms var(--zb-spring)}
+.zb-card:hover{transform:translateY(-4px) rotateX(6deg) rotateY(-4deg);box-shadow:var(--zb-l3)}
+.zb-card.is-dragging{transform:translateY(-10px) rotateX(10deg) rotateZ(2deg) scale(1.03);box-shadow:var(--zb-l3);cursor:grabbing}
+.zb-card.is-selected{outline:3px solid var(--cobalt);outline-offset:5px}
+/* board card: a STACK of slabs — the layers underneath are the nested boards */
+.zb-board{border-radius:var(--radius-lg);padding:var(--space-3);width:260px;margin:0 30px 40px 0}
+.zb-board{box-shadow:0 8px 0 0 var(--side),10px 14px 0 0 var(--lilac),10px 20px 0 0 var(--lilac-side),20px 28px 0 0 var(--mint),20px 34px 0 0 var(--mint-side),24px 52px 40px -14px rgba(160,140,255,.35)}
+.zb-board:hover,.zb-board.is-dragging{box-shadow:0 10px 0 0 var(--side),14px 20px 0 0 var(--lilac),14px 26px 0 0 var(--lilac-side),28px 40px 0 0 var(--mint),28px 46px 0 0 var(--mint-side),30px 70px 48px -16px rgba(160,140,255,.4)}
+.zb-mosaic{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-1);padding:var(--space-1);border-radius:14px;overflow:hidden;aspect-ratio:4/3;background:var(--surface-sunk);box-shadow:inset 0 3px 6px rgba(0,0,0,.12)}
+.zb-mosaic>i{display:block;border-radius:10px;background:var(--c)}
+.zb-board h3{margin:var(--space-3) 0 2px;font:800 22px/1.05 var(--zb-disp);letter-spacing:-.02em}
+.zb-meta{font:500 12px/16px var(--zb-sans);color:var(--ink-muted)}
+.zb-board-row{display:flex;justify-content:space-between;align-items:center;margin-top:var(--space-2)}
+.zb-far h3{font-size:40px;line-height:.95}
+/* image card: a mounted print with thickness */
+.zb-img{width:200px;padding:8px}
+.zb-img .zb-ph{border-radius:10px;aspect-ratio:4/5;display:block;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08);background:var(--c)}
+.zb-img .zb-cap{font:700 13px/16px var(--zb-sans);padding:9px 4px 2px}
+/* note: lemon slab with a strip of masking tape (collage) */
+.zb-note{width:200px;padding:var(--space-6) var(--space-4) var(--space-4);color:#17131F;transform:rotate(-2deg)}
+.zb-note::before{content:"";position:absolute;top:-10px;left:50%;width:78px;height:22px;margin-left:-39px;transform:rotate(3deg);background:rgba(255,255,255,.55);box-shadow:0 1px 2px rgba(0,0,0,.12);clip-path:polygon(3% 0,97% 4%,100% 50%,96% 100%,2% 96%,0 50%)}
+.zb-note:hover{transform:rotate(-2deg) translateY(-4px) rotateX(6deg)}
+.zb-note h4{margin:0 0 6px;font:700 16px/20px var(--zb-sans)}
+.zb-note p{margin:0;font:400 15px/22px var(--zb-sans)}
+.zb-badge{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 12px;border-radius:var(--radius-full);font:700 12px/1 var(--zb-sans);color:#17131F;box-shadow:var(--zb-l1)}
+.zb-panel{width:340px;padding:var(--space-8) var(--space-6);border-radius:var(--radius-xl);text-align:center;box-shadow:var(--zb-l2)}
+.zb-panel h3{margin:var(--space-6) 0 var(--space-2);font:800 24px/28px var(--zb-disp)}
+.zb-panel p{margin:0 0 var(--space-6);color:var(--ink-muted);font:400 15px/22px var(--zb-sans)}
+/* state object: an inflated toy blob */
+.zb-blob{width:72px;height:72px;margin:0 auto;border-radius:26px;box-shadow:var(--zb-l2);display:grid;place-items:center;font:800 30px/1 var(--zb-disp);color:#17131F;background:var(--face)}
+.zb-spin{animation:zb-bob 1100ms var(--zb-spring) infinite alternate}
+@keyframes zb-bob{to{transform:translateY(-10px) rotate(-8deg) scale(1.04)}}
+@media (prefers-reduced-motion:reduce){.zb-spin{animation:none}.zb-card,.zb-card:hover,.zb-card.is-dragging,.zb-note:hover{transform:none}.zb-btn,.zb-card,.zb-ibtn{transition:none}}

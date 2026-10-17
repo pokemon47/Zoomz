@@ -3,7 +3,8 @@
 **Status:** Draft for implementation  
 **Product name:** Zoomable Board (working title)  
 **Target:** Hackathon proof of concept  
-**Primary validation question:** Can a first-time user understand and enjoy moving through a visual project by zooming into nested boards?
+**Primary validation question:** Can a first-time user understand and enjoy moving through a visual project by zooming into nested boards?  
+**Design system:** Zoomboard (2.5D, tactile — see §8)
 
 ## 1. Product summary
 
@@ -25,7 +26,8 @@ The first demo should feel like a small visual inspiration board, not a general-
 2. Show at least three nested board levels while keeping the user oriented.
 3. Make zoom change the presentation of content, not just its scale.
 4. Demonstrate that cards can be rearranged without reshuffling the rest of the board.
-5. Keep the frontend and Python backend separate and ready for later Zenith.hosting deployment.
+5. Make the board feel physical: 2.5D objects with visible thickness, light and shadow, and springy, tactile feedback on every direct interaction.
+6. Keep the frontend and Python backend separate and ready for later Zenith.hosting deployment.
 
 ### Prototype success measures
 
@@ -33,6 +35,7 @@ The first demo should feel like a small visual inspiration board, not a general-
 - The user can tell which board they are viewing at all times.
 - The camera remains smooth with the demo dataset on a typical laptop.
 - In a short usability session, users describe the transition as useful or enjoyable and can point to a reason to use this over a folder list.
+- Users describe the cards and controls as tactile or "fun to touch", and the 2.5D depth helps rather than hinders reading the images.
 
 These are validation measures for the prototype, not automated release gates.
 
@@ -48,6 +51,8 @@ These are validation measures for the prototype, not automated release gates.
 - Breadcrumb navigation and basic zoom controls.
 - Semantic rendering at far, medium, and close zoom.
 - Dragging a card to a new position for the current browser session.
+- **2.5D presentation (core feature):** every card and control is a slab with a top-lit face, visible side face and soft cast shadow; child boards render as a stack of layers; the canvas reads as an isometric floor.
+- **Tactile motion:** press-to-sink, hover tilt toward the camera, drag lift with tilt and scale, spring settle on drop, and a fly-in that dives through a board's stack.
 - A separate React frontend and Python FastAPI backend.
 - A small JSON-backed demo API; no database.
 - A README with reliable local run and verification instructions.
@@ -61,7 +66,8 @@ These are validation measures for the prototype, not automated release gates.
 - Collaboration, mobile-specific layouts, or native apps.
 - Global Cmd/Ctrl-K search, visual-similarity embeddings, and auto-layout algorithms.
 - PDFs, video, or arbitrary file types.
-- 2.5D depth, parallax, tilt, or other spatial effects.
+- True 3D rendering (WebGL/Three.js scenes, real-time lighting, camera orbit). 2.5D is achieved with CSS transforms, layered shadows and SVG.
+- Device-motion/gyroscope parallax.
 - Actual Zenith publishing or submission.
 
 Do not add these features just to make the demo look more complete. The key question is whether nested camera navigation works.
@@ -70,11 +76,11 @@ Do not add these features just to make the demo look more complete. The key ques
 
 1. The user opens the app and lands on a populated top-level moodboard.
 2. They pan the empty canvas and zoom toward an area of interest.
-3. They see child boards as visual cards with a title and preview mosaic.
+3. They see child boards as stacked 2.5D cards with a title and preview mosaic; hovering tilts the card and fans its stack.
 4. They open a child board by double-clicking its card or selecting it and using its visible **Open board** action.
-5. The camera flies into that board. The breadcrumb updates to show the path.
+5. The camera dives into that board: the card fills the viewport while its under-layers slide away, so the transition reads as falling one level deeper. The breadcrumb updates to show the path.
 6. They zoom closer to see image thumbnails and readable note text.
-7. They drag an image or note to a new location.
+7. They drag an image or note to a new location; it lifts off the floor, tilts, follows the pointer, and settles with a small bounce on drop.
 8. They select a breadcrumb or use the Back control to return to a parent board.
 
 ## 6. Functional requirements
@@ -158,7 +164,22 @@ Use configurable scale thresholds in one place in the frontend. Exact values can
 - Update position in the frontend’s in-memory scene state on drop. The change remains until reload; persistence is not part of this prototype.
 - Moving a node must not reposition siblings or reorder the underlying fixture.
 
-### 6.5 Orientation and controls
+### 6.5 2.5D presentation and tactile feedback
+
+This is a core feature, not polish. Follow the Zoomboard design system tokens (`*-side`, `cast`, `highlight`, `lift-1…3`, `press`).
+
+- **Objects have thickness.** Cards, buttons and chrome pills render a top-lit face, a top-edge highlight, a visible side face in a darker shade of the face colour, and a soft cast shadow. No outline borders for depth.
+- **Board cards are stacks.** A child board sits on two offset layers representing the depth inside it. On hover the stack fans out.
+- **Canvas is a floor.** Faint isometric grid plus a soft light pool; nested boards tint the floor per depth level.
+- **Press:** objects sink into their side face (~70ms) and spring back with slight overshoot.
+- **Hover:** cards lift and tilt toward the camera (about rotateX 6°, rotateY −4°).
+- **Drag:** card lifts higher (`lift-3`), tilts ~10°, scales ~1.03 and follows the pointer 1:1 (the lift/tilt springs; the position does not lag). On drop it settles with one small bounce.
+- **Fly-in/out:** the camera dives through the board's stack; reverse on exit.
+- **Performance:** animate only `transform`, `opacity` and `box-shadow` on the active card; cards at rest are static. Use `will-change: transform` only during drag/flight. Maintain smooth frame rate with the demo dataset.
+- **Semantic zoom keeps depth:** at far zoom, slab thickness and shadows scale down with the card but never disappear entirely.
+- **Reduced motion:** keep static depth (thickness, shadows); remove tilt, fan-out, bounce and flights (use a short fade).
+
+### 6.6 Orientation and controls
 
 - Keep the current path visible in breadcrumbs.
 - Provide **Back**, **Fit board**, zoom in, zoom out, and a visible current zoom percentage.
@@ -166,7 +187,7 @@ Use configurable scale thresholds in one place in the frontend. Exact values can
 - A minimap is optional. Add it only if the main navigation works well first.
 - Global search is deferred; do not let it delay the camera prototype.
 
-### 6.6 Loading and error states
+### 6.7 Loading and error states
 
 - Show a simple loading state while fetching the demo scene.
 - If the API is unavailable, show a clear retry action and readable error message.
@@ -179,9 +200,9 @@ Use configurable scale thresholds in one place in the frontend. Exact values can
 - React + TypeScript + Vite in a dedicated **frontend/** directory.
 - Use **shadcn/ui** for conventional interface controls such as buttons, tooltips, breadcrumbs, and dialogs. Keep spatial cards and the board rendering custom so the board remains visually distinct.
 - Use Tailwind CSS as required by the selected shadcn setup.
-- Use Motion for React (**motion** package, imports from **motion/react**) for camera transitions and small UI transitions.
+- Use Motion for React (**motion** package, imports from **motion/react**) for camera transitions, card press/hover/drag springs, and stack fan-out.
 - Represent camera translation and scale with Motion values so pointer-driven updates do not require a React render on every frame.
-- Render the prototype scene with positioned DOM elements and CSS transforms. Do not add a canvas/WebGL engine or spatial-indexing library unless measured performance makes the DOM approach inadequate.
+- Render the prototype scene with positioned DOM elements and CSS transforms; 2.5D depth uses CSS 3D transforms (`perspective`, `rotateX/Y`), layered box-shadows and SVG. Do not add a canvas/WebGL engine or spatial-indexing library unless measured performance makes the DOM approach inadequate.
 - Keep motion and zoom thresholds in named constants/hooks rather than scattering them across components.
 - The app should work with mouse, trackpad, and keyboard. Keep the layout desktop-first.
 
@@ -216,11 +237,15 @@ Do not guess Zenith’s manifest syntax or claim a deployment is ready without c
 
 ## 8. Visual and interaction direction
 
-- Use a calm, editorial moodboard style: warm neutral canvas, clear typography, generous whitespace, colorful image content, and restrained shadows.
-- The board should feel like a designed space rather than a dashboard or file browser.
-- Keep chrome light: a compact header, breadcrumbs, and a small floating zoom-control group.
-- Make camera movement the main animation. Avoid animating every card continuously.
-- Use reduced-motion preferences, visible focus rings, keyboard-operable controls, sufficient contrast, and alt text.
+Use the **Zoomboard** design system. Direction: "not boring software" — bold, playful, tactile 2.5D.
+
+- **Warm paper floor, bold toy-like objects.** Warm neutral canvas with an isometric floor grid; UI objects in solid tomato, cobalt, lemon, mint and lilac, lit from above with visible thickness and soft shadows.
+- **The images stay the hero.** Bright colour lives on things you can act on (buttons, notes, board stacks). Image cards use a neutral mat so photography isn't fighting the chrome.
+- **Type:** Bricolage Grotesque (display), DM Sans (UI and notes), JetBrains Mono (zoom readout only).
+- **Chrome floats.** Compact breadcrumb pill top-left and zoom pill bottom-right, both as raised slabs.
+- **Motion is physical.** The camera dive is the hero animation; press, hover, drag and drop all respond with springs. Nothing idle-animates; motion stops when interaction stops.
+- **Collage accents.** Notes carry a strip of masking tape; small, used sparingly.
+- Reduced-motion preferences, visible focus rings, keyboard-operable controls, sufficient contrast (ink text on tomato/lemon/mint/lilac; never white on tomato), and alt text.
 - Avoid motion that continues after navigation or makes the user lose their place.
 
 ## 9. Acceptance criteria
@@ -235,10 +260,11 @@ The proof of concept is ready for a hackathon demo when all of the following are
 6. Far, medium, and close zoom visibly present different levels of detail.
 7. Users can move a card without moving its siblings; the new position remains for the current session.
 8. Camera transitions are smooth, direct manipulation feels responsive, and reduced-motion settings are respected.
-9. Loading and API error states are understandable.
-10. The README explains setup, run commands, controls, and known limitations.
-11. Frontend production build and backend checks/tests pass; there are no obvious browser console errors during the demo flow.
-12. No database, real-file import, file upload, auth, or persistent user data has been introduced.
+9. Cards and controls render in 2.5D (face, side, cast shadow); board cards render as stacks; press, hover-tilt, drag-lift and drop-settle feedback all work and stay smooth with the demo dataset.
+10. Loading and API error states are understandable.
+11. The README explains setup, run commands, controls, and known limitations.
+12. Frontend production build and backend checks/tests pass; there are no obvious browser console errors during the demo flow.
+13. No database, real-file import, file upload, auth, or persistent user data has been introduced.
 
 ## 10. Suggested implementation order
 
@@ -247,8 +273,8 @@ The proof of concept is ready for a hackathon demo when all of the following are
 3. Render a static board from the API fixture with three nested levels.
 4. Add camera pan, pointer-centered zoom, and fit-board behavior.
 5. Add nested-board entry/exit and breadcrumbs.
-6. Add semantic zoom states and refine transitions.
-7. Add card dragging and session-only position updates.
+6. Add semantic zoom states, 2.5D card rendering (slabs, stacks, iso floor) and refine transitions.
+7. Add card dragging with tactile lift/tilt/settle, press and hover feedback, and session-only position updates.
 8. Add loading/error states, reduced-motion support, keyboard details, README, and verification.
 9. Try the demo from a fresh browser session and tune interaction quality before adding optional polish.
 
