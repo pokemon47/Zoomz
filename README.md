@@ -63,7 +63,8 @@ GitHub Actions runs SQLite tests, PostgreSQL migrations and tests, frontend chec
 | Step inside a board | Keep zooming toward it | Tab to it, then Enter |
 | Fly to anything | Double-click it, or ⌘K search | Enter |
 | Go up a level | Breadcrumbs or Back | Escape |
-| Frame the current board | **Fit board** | `0` |
+| Frame everything on the current board | **Fit board** | `0` |
+| Hide or show image and board captions | Captions button next to Fit board | `C` |
 | Jump somewhere on this board | Click or drag in the minimap | — |
 | Move the path bar, zoom controls or map | Drag their grip | Grip + arrow keys |
 
@@ -71,7 +72,7 @@ GitHub Actions runs SQLite tests, PostgreSQL migrations and tests, frontend chec
 
 | Action | How |
 | --- | --- |
-| Add images, videos, PDFs, any file | Drop them on any board, paste with ⌘V, or **Add → Images & files…** (upload progress is shown on the card) |
+| Add images, videos, PDFs, any file | Drop them (or whole folders: each folder becomes a board, subfolders become boards inside it) on any board, paste with ⌘V, or **Add → Images & files…** (upload progress is shown on the card) |
 | Add a link | Paste a URL. Links get a preview; YouTube, Vimeo and Figma play in place up close |
 | New note / board | **Add**, or `N` / `B`. Pasting plain text also makes a note. Notes have no length limit: the text sizes itself to fill the note (a few words are big, a long note is small) and stays readable in the lightbox |
 | Edit text | Double-click a note, or a board's title strip (Enter also edits a focused note) |

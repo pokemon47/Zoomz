@@ -32,7 +32,9 @@ import { ZoomControls } from "@/components/zoomboard/ZoomControls"
 import { CameraEngine } from "@/lib/cameraEngine"
 import { copyNodes, lastClip, parseClip, pasteOps } from "@/lib/clipboard"
 import { MOTION, SPACE, ZOOM, cardBoxFactor, floorFor, perspectiveFor } from "@/lib/constants"
+import { IMPORT_GRID, IMPORT_LIMITS, countFiles, fileCard, planFolder, readDrop, type BoardPlan, type FolderTree } from "@/lib/folderImport"
 import { api } from "@/lib/http"
+import { getCaptions, saveCaptions } from "@/lib/captions"
 import { pathTo, titleOf } from "@/lib/scene"
 import { SCENERY, themeById, type SceneryId } from "@/lib/scenery"
 import { layout, lift, localFromScreen, sortByLayer, type Cam, type Layout, type Placed, type Space, type Viewport } from "@/lib/space"
@@ -92,6 +94,13 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
   const reduced = useReducedMotion() ?? false
   const space = store.space
   const toast = useCallback((m: string) => onToast?.(m), [onToast])
+  const [captions, setCaptions] = useState(getCaptions)
+  const toggleCaptions = useCallback(() => {
+    setCaptions((on) => {
+      saveCaptions(!on)
+      return !on
+    })
+  }, [])
 
   const [vp, setVp] = useState<Viewport>({ w: window.innerWidth, h: window.innerHeight })
   const engineRef = useRef<CameraEngine | null>(null)
@@ -293,6 +302,14 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
     [engine, kick, space],
   )
 
+  const fitBoard = useCallback(
+    (id: string) => {
+      engine.flyTo(space.fitContent(id, engine.vp), performance.now())
+      kick()
+    },
+    [engine, kick, space],
+  )
+
   const flyToNode = useCallback(
     (n: SceneNode) => {
       if (n.type === "board") return flyToBoard(n.id)
@@ -412,6 +429,51 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       setAnnouncement(`Added ${files.length === 1 ? files[0].name : `${files.length} files`} to ${titleOf(space.node(board)!)}`)
     },
     [boardAt, clampInto, engine, lay.focus, localAt, space, spawn, store, toast],
+  )
+
+  const importFolders = useCallback(
+    async (folders: FolderTree[], at: { x: number; y: number }) => {
+      const target = boardAt(at.x, at.y, [], true)
+      if (!store.canEdit(target)) return toast("You can only view this board.")
+      const total = folders.reduce((n, f) => n + countFiles(f), 0)
+      if (total >= IMPORT_LIMITS.files) toast(`Only the first ${IMPORT_LIMITS.files} files are imported.`)
+      const anchor = localAt(target, at.x, at.y)
+      const top = topRank(space, target)
+      // Every board first, in one undoable edit, then each board's files.
+      const ops: Op[] = []
+      const uploads: { board: string; plan: BoardPlan }[] = []
+      const roots: string[] = []
+      const make = (plan: BoardPlan, parentId: string, x: number, y: number, rank: number) => {
+        const id = newId("board")
+        ops.push({ type: "create", node: { id, type: "board", parentId, x, y, z: 0, w: plan.w, h: plan.h, rank, content: { title: plan.name.slice(0, 200), description: null, frame: plan.frame } } })
+        if (plan.files.length) uploads.push({ board: id, plan })
+        plan.folders.forEach((f, i) => make(f.plan, id, f.x, f.y, i))
+        return id
+      }
+      const plans = folders.map(planFolder)
+      const span = plans.reduce((w, p) => w + p.w, 0) + (plans.length - 1) * IMPORT_GRID.gap
+      let x = anchor.x - span / 2
+      plans.forEach((plan, i) => {
+        const p = clampInto(target, plan, x, anchor.y - plan.h / 2)
+        roots.push(make(plan, target, p.x, p.y, top + i))
+        x += plan.w + IMPORT_GRID.gap
+      })
+      // The server takes at most 500 edits at once.
+      for (let i = 0; i < ops.length; i += 500) {
+        const chunk = ops.slice(i, i + 500)
+        if (!store.commit(chunk.length === 1 ? chunk[0] : { type: "batch", ops: chunk }, "import folder")) return
+      }
+      spawn(roots)
+      setAnnouncement(`Importing ${folders.length === 1 ? folders[0].name : `${folders.length} folders`}: ${total} files`)
+      for (const { board, plan } of uploads) {
+        await store.addFiles(plan.files, board, (i, file, ratio) => {
+          const { w, h } = fileCard(file, ratio)
+          const cell = plan.fileCells[i]
+          return { x: cell.x + (IMPORT_GRID.fileCellW - w) / 2, y: cell.y + (IMPORT_GRID.fileCellH - h) / 2, w, h, z: 12 + Math.round(Math.random() * 26), rank: i }
+        })
+      }
+    },
+    [boardAt, clampInto, localAt, space, spawn, store, toast],
   )
 
   const nearCentre = useCallback(
@@ -917,7 +979,13 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
     if (!isFileDrag(e)) return
     e.preventDefault()
     setFileDrag(null)
-    void addFiles(Array.from(e.dataTransfer.files), local(e))
+    const at = local(e)
+    const drop = readDrop(e.dataTransfer)
+    if (!drop) return void addFiles(Array.from(e.dataTransfer.files), at)
+    void drop.folders
+      .then((folders) => importFolders(folders, at))
+      .catch(() => toast("That folder couldn't be read."))
+    if (drop.looseFiles.length) void addFiles(drop.looseFiles, at)
   }
 
   // ---------- keyboard ----------
@@ -977,9 +1045,10 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       if ((e.key === "Delete" || e.key === "Backspace") && selection.length) deleteSelection()
       else if (k === "n" && !store.readOnly) setCreating("note")
       else if (k === "b" && !store.readOnly) setCreating("board")
+      else if (k === "c") toggleCaptions()
       else if (e.key === "+" || e.key === "=") zoomCentre(ZOOM.step)
       else if (e.key === "-" || e.key === "_") zoomCentre(1 / ZOOM.step)
-      else if (e.key === "0") flyToBoard(lay.focus)
+      else if (e.key === "0") fitBoard(lay.focus)
       else if (t?.closest("button, nav")) return
       else if (e.key.startsWith("Arrow")) {
         const pan = { ArrowLeft: [ZOOM.keyPan, 0], ArrowRight: [-ZOOM.keyPan, 0], ArrowUp: [0, ZOOM.keyPan], ArrowDown: [0, -ZOOM.keyPan] }[e.key]
@@ -992,7 +1061,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [copySelection, creating, deleteSelection, duplicate, editing, engine, flyToBoard, goUp, held, kick, lay.focus, menu, moveLayer, rectOf, selection, space, store, undo, vp, zoomCentre])
+  }, [copySelection, creating, deleteSelection, duplicate, editing, engine, fitBoard, flyToBoard, goUp, held, kick, lay.focus, menu, moveLayer, rectOf, selection, space, store, toggleCaptions, undo, vp, zoomCentre])
 
   const onItemKey = (e: ReactKeyboardEvent<HTMLDivElement>, n: SceneNode) => {
     if (e.target !== e.currentTarget) return
@@ -1018,7 +1087,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
   const peers = [...store.peers.values()]
 
   return (
-    <div className="absolute inset-0">
+    <div className={captions ? "absolute inset-0" : "absolute inset-0 zb-clean"}>
       <div
         ref={viewportRef}
         className={`zb-viewport zb-space${press?.kind === "pan" && press.moved ? " is-panning" : ""}`}
@@ -1145,7 +1214,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       <DraggablePanel id="zoom" label="the zoom controls" defaultPos={{ corner: "br", dx: 16, dy: 16 }}>
         <div className="zb-panel-stack">
           <LevelBadge depth={focusDepth} />
-          <ZoomControls readout={readout} onZoomIn={() => zoomCentre(ZOOM.step)} onZoomOut={() => zoomCentre(1 / ZOOM.step)} onFit={() => flyToBoard(lay.focus)} />
+          <ZoomControls readout={readout} onZoomIn={() => zoomCentre(ZOOM.step)} onZoomOut={() => zoomCentre(1 / ZOOM.step)} onFit={() => fitBoard(lay.focus)} captions={captions} onToggleCaptions={toggleCaptions} />
         </div>
       </DraggablePanel>
       <DraggablePanel id="minimap" label="the map" defaultPos={{ corner: "bl", dx: 16, dy: 16 }} className="zb-minimap-panel">

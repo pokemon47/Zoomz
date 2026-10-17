@@ -826,3 +826,10 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
 .zb-segment[aria-checked="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 3px 0 0 var(--surface-side), 0 6px 12px -6px var(--cast); transform: translateY(-1px); }
 .zb-segment:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .zb-segment { transition: none; } }
+
+/* Captions off: pictures only. Images grow into the caption strip; boards keep their title
+   strip as an (invisible) drag handle, and lose their label chip when seen from afar. */
+.zb-clean .zb-img .zb-ph ~ div:not(.zb-progress) { display: none; }
+.zb-clean .zb-inner-titles,
+.zb-clean .zb-head-meta,
+.zb-clean .zb-board.zb-far .zb-inner-head { visibility: hidden; }
