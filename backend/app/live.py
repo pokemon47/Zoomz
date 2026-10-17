@@ -16,6 +16,7 @@ import asyncio
 import itertools
 import logging
 import time
+import math
 from typing import Any, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -134,17 +135,72 @@ def _apply(space_id: str, user: Optional[User], role: str, op: Any, cid: Any) ->
         space = db.get(Space, space_id)
         if not space:
             raise ops_mod.OpError("This board was deleted.", 410)
-        u = db.merge(user, load=False) if user else None
+        u = db.get(User, user.id) if user else None
+        role = space_role(db, space, u)
+        if role is None:
+            raise ops_mod.OpError("You no longer have access to this board.", 403)
         op = dict(op) if isinstance(op, dict) else op
         if isinstance(op, dict):
             op["cid"] = cid
         return ops_mod.apply(db, space, u, role, op)
 
 
+def _drag(space_id: str, user: Optional[User], msg: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Transient previews must obey the same hierarchy/access rules as durable moves."""
+    if not user:
+        return None
+    with SessionLocal() as db:
+        space = db.get(Space, space_id)
+        u = db.get(User, user.id)
+        role = space_role(db, space, u) if space else None
+        if role is None:
+            return None
+        ctx = ops_mod.Ctx(db, space, u, role)
+        try:
+            n = ctx.node(msg.get("id"))
+            parent = ctx.board(msg.get("parentId"))
+            if n.parent_id is None or (n.type == "board" and ctx.is_inside(parent.id, n.id)):
+                return None
+            ctx.need_edit(n.parent_id)
+            ctx.need_edit(parent.id)
+            coords = [msg.get("x"), msg.get("y")]
+            if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or abs(v) > 1e6 for v in coords):
+                return None
+            return {"id": n.id, "parentId": parent.id, "x": coords[0], "y": coords[1], "done": msg.get("done") is True}
+        except ops_mod.OpError:
+            return None
+
+
 def _replay(space_id: str, since: int) -> Optional[list[dict[str, Any]]]:
     with SessionLocal() as db:
         space = db.get(Space, space_id)
         return ops_mod.replay(db, space, since) if space else None
+
+
+def _presence(msg: dict[str, Any]) -> dict[str, Any]:
+    def identifier(value):
+        return isinstance(value, str) and 0 < len(value) <= 64
+
+    def number(value):
+        return not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(value) and abs(value) <= 1e12
+
+    out = {}
+    if identifier(msg.get("focus")):
+        out["focus"] = msg["focus"]
+    cursor = msg.get("cursor")
+    if cursor is None and "cursor" in msg:
+        out["cursor"] = None
+    elif isinstance(cursor, dict) and all(number(cursor.get(k)) for k in ("x", "y")):
+        out["cursor"] = {k: cursor[k] for k in ("x", "y")}
+        if identifier(cursor.get("b")):
+            out["cursor"]["b"] = cursor["b"]
+    view = msg.get("view")
+    if isinstance(view, dict) and identifier(view.get("b")) and all(number(view.get(k)) for k in ("x", "y", "w", "h")) and view["w"] > 0 and view["h"] > 0:
+        out["view"] = {k: view[k] for k in ("b", "x", "y", "w", "h")}
+    path = msg.get("path")
+    if isinstance(path, list) and len(path) <= 256 and all(identifier(v) for v in path):
+        out["path"] = path
+    return out
 
 
 @router.websocket("/api/spaces/{space_id}/live")
@@ -194,12 +250,14 @@ async def live(ws: WebSocket, space_id: str, since: Optional[int] = None, public
             elif t == "presence":
                 if not conn.allow(0.25):
                     continue
-                conn.presence = {k: msg.get(k) for k in ("focus", "cursor", "view", "path") if k in msg}
+                conn.presence = _presence(msg)
                 await hub.broadcast(space_id, {"t": "presence", "peer": conn.peer()}, skip=conn)
             elif t == "drag":
-                if conn.role == "viewer" or not conn.allow(0.25):
+                if not conn.allow(0.25):
                     continue
-                await hub.broadcast(space_id, {"t": "drag", "connId": conn.id, **{k: msg.get(k) for k in ("id", "x", "y", "parentId", "done")}}, skip=conn)
+                preview = await run_in_threadpool(_drag, space_id, conn.user, msg)
+                if preview:
+                    await hub.broadcast(space_id, {"t": "drag", "connId": conn.id, **preview}, skip=conn)
             elif t == "ping":
                 await hub.send(conn, {"t": "pong"})
     except (WebSocketDisconnect, RuntimeError):

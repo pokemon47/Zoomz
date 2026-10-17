@@ -376,3 +376,43 @@ def test_export_and_delete_account(make_client):
     assert c.get("/api/me").status_code == 401
     other = make_client("gone2@example.com")
     assert other.get(f"/api/spaces/{sid}/scene").status_code == 404
+
+
+def test_stacking_rank_round_trips(make_client):
+    c = make_client("layers@example.com")
+    sid = first_space(c)["id"]
+    root = scene(c, sid)["rootBoardId"]
+    nid = uid()
+    r = op(c, sid, {"type": "create", "node": {"id": nid, "type": "note", "parentId": root, "rank": 5, "content": {"title": "top"}}})
+    assert r.json()["changes"][0]["node"]["rank"] == 5
+    op(c, sid, {"type": "update", "id": nid, "patch": {"rank": -2.5}})
+    assert next(n for n in scene(c, sid)["nodes"] if n["id"] == nid)["rank"] == -2.5
+    assert op(c, sid, {"type": "update", "id": nid, "patch": {"rank": "high"}}).status_code == 400
+
+
+def test_notes_have_no_practical_length_limit(make_client):
+    c = make_client("longnote@example.com")
+    sid = first_space(c)["id"]
+    root = scene(c, sid)["rootBoardId"]
+    body = "word " * 12_000  # ~60,000 characters
+    nid = uid()
+    r = op(c, sid, {"type": "create", "node": {"id": nid, "type": "note", "parentId": root, "content": {"title": "Long", "body": body}}})
+    assert r.status_code == 200
+    assert len(r.json()["changes"][0]["node"]["content"]["body"]) == len(body)
+
+
+def test_folder_import_creates_nested_boards_in_one_batch(make_client):
+    # A dropped folder becomes one batch of boards, parents before children, then files upload into them.
+    c = make_client("folders@example.com")
+    sid = first_space(c)["id"]
+    root = scene(c, sid)["rootBoardId"]
+    top, inner, deeper = uid("board"), uid("board"), uid("board")
+    board = lambda id, parent, title: {"type": "create", "node": {"id": id, "type": "board", "parentId": parent, "x": 90, "y": 90, "w": 360, "h": 300, "content": {"title": title, "frame": {"x": 0, "y": 0, "w": 1200, "h": 1000}}}}
+    r = op(c, sid, {"type": "batch", "ops": [board(top, root, "Trip"), board(inner, top, "Day 1"), board(deeper, inner, "Beach")]})
+    assert r.status_code == 200, r.text
+    r = c.post(f"/api/spaces/{sid}/files", params={"board": deeper}, files={"file": ("sea.png", png_bytes(), "image/png")}, headers=H)
+    assert r.status_code == 200, r.text
+    assert op(c, sid, {"type": "create", "node": {"id": uid("img"), "type": "image", "parentId": deeper, "x": 100, "y": 100, "w": 220, "h": 190, "content": {"title": "sea", "fileId": r.json()["id"]}}}).status_code == 200
+    nodes = {n["id"]: n for n in scene(c, sid)["nodes"]}
+    assert nodes[inner]["parentId"] == top and nodes[deeper]["parentId"] == inner
+    assert any(n["parentId"] == deeper and n["type"] == "image" for n in nodes.values())

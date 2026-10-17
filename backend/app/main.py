@@ -22,21 +22,29 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import delete, select, text
 
-from . import account, auth, discover, files, live, spaces
+from . import account, auth, discover, files, live, spaces, mail
 from .config import settings
-from .db import Base, SessionLocal, engine
+from .db import SessionLocal, engine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("zoomz")
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_FILE = APP_DIR / "data" / "demo-board.json"
 STATIC_DIR = APP_DIR / "static"
 
+def private_error_event(event, hint):
+    # Authentication links can occur in requests and breadcrumbs. Keep them out of telemetry.
+    event.pop("request", None)
+    event.pop("breadcrumbs", None)
+    return event
+
+
 if settings.sentry_dsn:
     import sentry_sdk
 
-    sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.env, traces_sample_rate=0.05, send_default_pii=False)
+    sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.env, traces_sample_rate=0, send_default_pii=False, include_local_variables=False, before_send=private_error_event)
 
 
 # ---------------------------------------------------------------- demo scene contract (unchanged)
@@ -100,6 +108,11 @@ app = FastAPI(title="Zoomz API", version="1.0.0", docs_url="/api/docs" if settin
 UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
 
 
+@app.exception_handler(mail.DeliveryError)
+async def email_unavailable(request: Request, exc: mail.DeliveryError):
+    return JSONResponse({"detail": str(exc)}, status_code=503)
+
+
 @app.middleware("http")
 async def guard(request: Request, call_next):
     # CSRF: cookies are SameSite=Lax, and every state-changing API call must also carry a
@@ -143,11 +156,11 @@ def client_error(body: ClientError, request: Request) -> dict:
     from .ratelimit import limit
 
     limit(request, "client-error", 30, 10)
-    log.warning("client error at %s: %s\n%s", (body.url or "")[:300], body.message[:500], (body.stack or "")[:3000])
+    log.warning("Client error reported; client-supplied details omitted for privacy")
     if settings.sentry_dsn:
         import sentry_sdk
 
-        sentry_sdk.capture_message(f"client: {body.message[:300]}", level="error")
+        sentry_sdk.capture_message("Client error reported", level="error")
     return {"ok": True}
 
 
@@ -162,12 +175,23 @@ app.mount("/api/assets", StaticFiles(directory=STATIC_DIR), name="assets")
 
 @app.on_event("startup")
 def startup() -> None:
-    if settings.database_url.startswith("sqlite"):
-        # Local development and tests: create tables directly. Production runs `alembic upgrade head`.
-        from . import models  # noqa: F401 - registers tables
+    from .preflight import check_storage
 
-        Base.metadata.create_all(engine)
+    check_storage(settings.storage_dir, require_mount=not settings.dev)
+    if settings.database_url.startswith("sqlite"):
+        # Local development and tests run the same migrations production runs (the container
+        # does `alembic upgrade head` before starting), so schemas never drift apart.
+        migrate()
     threading.Thread(target=_housekeeping, daemon=True, name="housekeeping").start()
+
+
+def migrate() -> None:
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config(str(APP_DIR.parent / "alembic.ini"))
+    cfg.set_main_option("script_location", str(APP_DIR.parent / "alembic"))
+    command.upgrade(cfg, "head")
 
 
 def _housekeeping() -> None:

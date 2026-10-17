@@ -1,0 +1,52 @@
+# Standard Docker Compose only. Not an unverified Zenith manifest.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zoomz
+      POSTGRES_USER: zoomz
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  app:
+    build: .
+    restart: unless-stopped
+    stop_grace_period: 60s
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL with URL-encoded credentials}
+      PUBLIC_URL: ${PUBLIC_URL:?Set the public HTTPS origin}
+      SECRET_KEY: ${SECRET_KEY:?Set a stable random secret}
+      STORAGE_DIR: /data/uploads
+      SMTP_HOST: ${SMTP_HOST:?Set the instance SMTP host}
+      SMTP_PORT: ${SMTP_PORT:?Set the instance SMTP port}
+      SMTP_ENCRYPTION: ${SMTP_ENCRYPTION:?Set starttls, tls, or none}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:?Set the authorized sender address}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Zoomz}
+      SMTP_TIMEOUT: ${SMTP_TIMEOUT:-15}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
+      SPACE_QUOTA_MB: ${SPACE_QUOTA_MB:-5120}
+      UPLOAD_BODY_LIMIT: ${UPLOAD_BODY_LIMIT:-201m}
+      TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:-127.0.0.1/32}
+    volumes:
+      - uploads:/data/uploads
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
+volumes:
+  postgres-data:
+  uploads:

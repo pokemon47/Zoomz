@@ -29,7 +29,9 @@ MAX_BATCH = 500
 CONTENT_FIELDS: dict[str, dict[str, int]] = {
     "board": {"title": 120, "description": 600},
     "image": {"title": 160, "alt": 600, "fileId": 32, "src": 300},
-    "note": {"title": 120, "body": 4000},
+    # Notes have no practical length limit (the text shrinks to fit the note); this cap only
+    # stops abuse — about 15,000 words.
+    "note": {"title": 120, "body": 100_000},
     "file": {"title": 255, "fileId": 32},
     "link": {"url": 2000, "title": 300, "description": 600, "image": 2000, "site": 120, "embed": 2000},
 }
@@ -51,7 +53,10 @@ def node_out(n: Node, files: dict[str, StoredFile] | None = None) -> dict[str, A
     if fid:
         f = (files or {}).get(fid)
         content.update(file_urls(f) if f else {"status": "missing"})
-    return {"id": n.id, "type": n.type, "parentId": n.parent_id, "x": n.x, "y": n.y, "z": n.z, "w": n.w, "h": n.h, "content": content}
+    out = {"id": n.id, "type": n.type, "parentId": n.parent_id, "x": n.x, "y": n.y, "z": n.z, "w": n.w, "h": n.h, "content": content}
+    if n.rank is not None:
+        out["rank"] = n.rank
+    return out
 
 
 def file_urls(f: StoredFile) -> dict[str, Any]:
@@ -200,6 +205,7 @@ def _create(ctx: Ctx, data: Any) -> None:
         z=_num(data.get("z", 0), 0, 400, "z"),
         w=_num(data.get("w", 200), 20, 20000, "w"),
         h=_num(data.get("h", 200), 20, 20000, "h"),
+        rank=_num(data["rank"], -1e9, 1e9, "rank") if data.get("rank") is not None else None,
         content=content,
         search_text=search_text(type_, content),
         created_by=ctx.user.id if ctx.user else None,
@@ -228,6 +234,8 @@ def _update(ctx: Ctx, data: Any) -> None:
     for k, (lo, hi) in {"x": (-1e6, 1e6), "y": (-1e6, 1e6), "z": (0, 400), "w": (20, 20000), "h": (20, 20000)}.items():
         if k in patch:
             setattr(n, k, _num(patch[k], lo, hi, k))
+    if "rank" in patch:
+        n.rank = None if patch["rank"] is None else _num(patch["rank"], -1e9, 1e9, "rank")
     if "content" in patch:
         merged = {**(n.content or {}), **_clean_content(n.type, patch["content"], partial=True)}
         n.content = merged
@@ -262,16 +270,20 @@ def apply(db: Session, space: Space, user: Optional[User], base_role: str, op: A
     """Apply one operation (or a batch) atomically. Returns the broadcast message."""
     if not isinstance(op, dict) or op.get("type") not in (*HANDLERS, "batch"):
         raise OpError("unknown operation")
-    ctx = Ctx(db, space, user, base_role)
     ops = op.get("ops") if op["type"] == "batch" else [op]
     if not isinstance(ops, list) or not ops or len(ops) > MAX_BATCH:
         raise OpError("a batch needs 1–500 operations")
     try:
+        # Lock before reading/editing nodes, and refresh an already-loaded identity.
+        # Concurrent PostgreSQL requests must not allocate the same sequence number.
+        locked = db.scalar(select(Space).where(Space.id == space.id).with_for_update().execution_options(populate_existing=True))
+        if locked is None:
+            raise OpError("This board no longer exists.", 404)
+        ctx = Ctx(db, locked, user, base_role)
         for o in ops:
             if not isinstance(o, dict) or o.get("type") not in HANDLERS:
                 raise OpError("unknown operation")
             HANDLERS[o["type"]](ctx, o.get("node") if o["type"] == "create" else o)
-        locked = db.get(Space, space.id, with_for_update=True) or space
         locked.seq += 1
         locked.updated_at = now()
         msg = {"t": "op", "seq": locked.seq, "by": user.id if user else None, "cid": op.get("cid"), "changes": ctx.changes}

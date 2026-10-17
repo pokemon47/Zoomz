@@ -1,5 +1,5 @@
 import { memo } from "react"
-import { SCENERY, layerMarkup, placeLayers, type Theme } from "@/lib/scenery"
+import { SCENERY, layerMarkup, layerViewBox, placeLayers, type Theme } from "@/lib/scenery"
 
 type Props = {
   theme: Theme
@@ -12,19 +12,29 @@ type Props = {
   parallax: boolean
 }
 
-const VIEWBOX = `${-SCENERY.period * 1.5} ${-SCENERY.halfHeight} ${SCENERY.period * 3} ${SCENERY.halfHeight * 2}`
-
-/** One static layer: markup never changes, only its transform does. */
-const Layer = memo(function Layer({ markup }: { markup: string }) {
-  return <svg className="zb-scene-svg" viewBox={VIEWBOX} preserveAspectRatio="xMidYMid meet" aria-hidden dangerouslySetInnerHTML={{ __html: markup }} />
+/**
+ * One layer, always exactly the size of the screen. Moving through it changes its viewBox
+ * (which part of the layer is visible), never its size: a near layer scaled up as a DOM
+ * element would be tens of thousands of pixels wide and overflow GPU texture limits.
+ */
+const Layer = memo(function Layer({ markup, viewBox, opacity, haze }: { markup: string; viewBox: string; opacity: number; haze: number }) {
+  return (
+    <svg
+      className="zb-scene-layer zb-scene-full"
+      viewBox={viewBox}
+      preserveAspectRatio="none"
+      style={{ opacity, ["--hz" as string]: `${haze}%` }}
+      aria-hidden
+      dangerouslySetInnerHTML={{ __html: markup }}
+    />
+  )
 })
 
 /** The world behind the boards: sky, sun, and layers you walk through as you zoom. */
 export function Scenery({ theme, z, panX, panY, pointer, vp, parallax }: Props) {
   if (!theme.layer) return null
-  // Wide enough that the farthest layer still spans the screen.
+  // Width of a layer drawn at scale 1, chosen so the farthest layer still spans the screen.
   const layerW = Math.max(vp.w, vp.h * 2) * 3.2
-  const layerH = (layerW * SCENERY.halfHeight * 2) / (SCENERY.period * 3)
   const placements = placeLayers(z, panX, panY, pointer, layerW, vp.h, parallax)
   const horizonY = vp.h * SCENERY.horizon
   return (
@@ -44,21 +54,7 @@ export function Scenery({ theme, z, panX, panY, pointer, vp, parallax }: Props) 
         />
       )}
       {placements.map((p) => (
-        <div
-          key={p.n}
-          className="zb-scene-layer"
-          style={{
-            width: layerW,
-            height: layerH,
-            left: vp.w / 2 - layerW / 2,
-            top: horizonY - layerH / 2,
-            opacity: p.opacity,
-            transform: `translate3d(${p.tx}px, ${p.ty}px, 0) scale(${p.scale})`,
-            ["--hz" as string]: `${p.haze}%`,
-          }}
-        >
-          <Layer markup={layerMarkup(theme, p.n)} />
-        </div>
+        <Layer key={p.n} markup={layerMarkup(theme, p.n)} viewBox={layerViewBox(p, layerW, vp, horizonY)} opacity={p.opacity} haze={p.haze} />
       ))}
     </div>
   )

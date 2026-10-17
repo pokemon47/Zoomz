@@ -10,6 +10,8 @@ export type BaseNode = {
   z?: number
   w: number
   h: number
+  /** Stacking order among siblings; higher paints on top. Unset = default order by type. */
+  rank?: number | null
 }
 
 /** Signed file URLs and facts the server adds to items that point at an uploaded file. */

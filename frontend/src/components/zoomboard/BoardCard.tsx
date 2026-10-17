@@ -8,6 +8,8 @@ import type { Tactile } from "./TactileSlab"
 
 export type BoardCardProps = {
   title: string
+  /** Caption, shown under the title once the board is big enough to read it. */
+  description?: string | null
   count: number
   lod: LOD
   selected?: boolean
@@ -39,7 +41,7 @@ function StackLayer({ index, fanned, colour }: { index: 0 | 1; fanned: boolean; 
  * level inside, and its contents are drawn on it by the space. The stack underneath
  * shows there is depth to fall into. Grab the title strip to move the whole board.
  */
-export const BoardCard = memo(function BoardCard({ title, count, lod, selected, tactile, reduced, innerFloor, innerDot, dropTarget }: BoardCardProps) {
+export const BoardCard = memo(function BoardCard({ title, description, count, lod, selected, tactile, reduced, innerFloor, innerDot, dropTarget }: BoardCardProps) {
   const fanned = !reduced && (tactile === "hover" || tactile === "drag")
   return (
     <div className="zb-board-wrap">
@@ -64,7 +66,10 @@ export const BoardCard = memo(function BoardCard({ title, count, lod, selected, 
           }}
         />
         <div className="zb-inner-head" data-board-handle title="Drag to move this board">
-          <span className="zb-inner-title">{title}</span>
+          <span className="zb-inner-titles">
+            <span className="zb-inner-title">{title}</span>
+            {description && lod !== "far" && <span className="zb-inner-caption">{description}</span>}
+          </span>
           <span className="zb-head-meta">
             <span className="zb-meta">{count} items</span>
             <GripHorizontal size={16} strokeWidth={2.25} aria-hidden className="zb-grip" />

@@ -1,161 +1,106 @@
-# https://zenith.hosting/developers
-
+# Published runtime manifest. Preview policy differs; see README.
 x-zenith:
   catalog:
     name: Zoomz
+    description: Collaborative moodboards with continuously zoomable nested boards.
+    authors: [burtle-dev]
+    tags: [moodboard, collaboration, images]
+    source: https://github.com/pokemon47/Zoomz
+    # No license grant exists in this repository. Do not invent one for publishing.
+    license: UNLICENSED
   expose:
-    - service: web
+    - service: app
       port: 8080
       web: true
   storage:
-    postgres-data:
-      volume: zoomz-postgres
-      label: Database
-      description: Accounts, boards, notes, sharing and the edit history.
-      default_size: 5Gi
-    files:
-      volume: zoomz-files
-      label: Uploaded files
-      description: Images, videos and documents people add to boards, with their previews.
-      default_size: 20Gi
-    backups:
-      volume: zoomz-backups
-      label: Database backups
-      description: Nightly compressed database dumps (the last 14 are kept).
-      default_size: 5Gi
+    database:
+      volume: postgres-data
+      label: PostgreSQL data
+      public: false
+    media:
+      volume: uploads
+      label: Uploaded originals and previews
+      public: false
   env:
     PUBLIC_URL:
       alias: ZENITH_PUBLIC_URL
-      services: [api]
+      services: [app]
     SECRET_KEY:
-      generate: '([A-Za-z0-9]{24})([A-Za-z0-9]{24})'
-      services: [api]
+      generate: '([A-Za-z0-9]{11})([A-Za-z0-9]{11})([A-Za-z0-9]{11})([A-Za-z0-9]{11})'
+      services: [app]
     POSTGRES_PASSWORD:
-      generate: '([A-Za-z0-9]{16})([A-Za-z0-9]{16})'
-      services: [postgres, backup]
-    PGPASSWORD:
-      template: '{POSTGRES_PASSWORD}'
-      services: [backup]
+      generate: '([A-Za-z0-9]{12})([A-Za-z0-9]{12})([A-Za-z0-9]{12})'
+      services: [db]
     DATABASE_URL:
-      template: postgresql+psycopg://zoomz:{POSTGRES_PASSWORD}@postgres:5432/zoomz
-      services: [api]
+      template: 'postgresql+psycopg://zoomz:{POSTGRES_PASSWORD}@db:5432/zoomz'
+      services: [app]
     SMTP_HOST:
-      input:
-        label: SMTP server
-        description: Mail server for sign-in links and invites, e.g. smtp.postmarkapp.com. Without it nobody can sign in by email.
-        required: true
-      services: [api]
+      alias: ZENITH_SMTP_HOST
+      services: [app]
     SMTP_PORT:
-      input:
-        label: SMTP port
-        description: 587 (STARTTLS) or 465 (TLS).
-        default: '587'
-        required: true
-      services: [api]
+      alias: ZENITH_SMTP_PORT
+      services: [app]
     SMTP_USER:
-      input:
-        label: SMTP username
-        description: Username for the mail server.
-        required: false
-      services: [api]
+      alias: ZENITH_SMTP_USER
+      services: [app]
     SMTP_PASSWORD:
-      input:
-        label: SMTP password
-        description: Password or API token for the mail server.
-        required: false
-      services: [api]
+      alias: ZENITH_SMTP_PASS
+      services: [app]
     SMTP_FROM:
+      alias: ZENITH_SMTP_FROM
+      services: [app]
+    TRUSTED_PROXY_CIDR:
       input:
-        label: From address
-        description: Who sign-in emails come from, e.g. Zoomz <hello@yourdomain.com>.
-        required: true
-      services: [api]
+        label: Trusted Zenith ingress CIDR
+        description: Confirm the exact ingress CIDR with Zenith before accepting users. Never trust all networks.
+        default: '127.0.0.1/32'
+      services: [app]
     GOOGLE_CLIENT_ID:
       input:
-        label: Google OAuth client ID
-        description: Optional. Enables "Continue with Google". Redirect URI is <your URL>/api/auth/google/callback.
-        required: false
-      services: [api]
+        label: Google OAuth client ID (optional)
+      services: [app]
     GOOGLE_CLIENT_SECRET:
       input:
-        label: Google OAuth client secret
-        description: Optional, pairs with the client ID.
-        required: false
-      services: [api]
-    SENTRY_DSN:
-      input:
-        label: Sentry DSN
-        description: Optional error monitoring.
-        required: false
-      services: [api]
-    MAX_UPLOAD_MB:
-      input:
-        label: Largest upload (MB)
-        description: Per file.
-        default: '200'
-        required: true
-      services: [api]
-    SPACE_QUOTA_MB:
-      input:
-        label: Storage per board (MB)
-        description: Total uploads allowed in one board.
-        default: '5120'
-        required: true
-      services: [api]
-
+        label: Google OAuth client secret (optional)
+        secret: true
+      services: [app]
 services:
-  postgres:
+  app:
+    build: .
+    user: '10001:10001'
+    environment:
+      APP_ENV: production
+      STORAGE_DIR: /data/uploads
+      SMTP_ENCRYPTION: starttls
+      SMTP_FROM_NAME: Zoomz
+      SMTP_TIMEOUT: '15'
+      MAX_UPLOAD_MB: '200'
+      SPACE_QUOTA_MB: '5120'
+      UPLOAD_BODY_LIMIT: 201m
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+  db:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: zoomz
       POSTGRES_DB: zoomz
     volumes:
-      - zoomz-postgres:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: [CMD-SHELL, pg_isready -U zoomz -d zoomz]
-      interval: 3s
+      test: [CMD, pg_isready, -U, zoomz, -d, zoomz]
+      interval: 5s
       timeout: 5s
-      retries: 30
-
-  api:
-    image: ghcr.io/pokemon47/zoomz-api:main
-    environment:
-      APP_ENV: production
-      STORAGE_DIR: /data/files
-    volumes:
-      - zoomz-files:/data/files
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  web:
-    image: ghcr.io/pokemon47/zoomz-web:main
-    depends_on:
-      api:
-        condition: service_started
-
-  backup:
-    image: postgres:17-alpine
-    environment:
-      PGHOST: postgres
-      PGUSER: zoomz
-      PGDATABASE: zoomz
-    volumes:
-      - zoomz-backups:/backups
-    entrypoint: [sh, -c]
-    command:
-      - |
-        until pg_isready -q; do sleep 5; done
-        while true; do
-          date -u +/backups/zoomz-%Y%m%d-%H%M.dump | xargs pg_dump --format=custom --file && echo "backup ok"
-          ls -1t /backups/zoomz-*.dump | tail -n +15 | xargs -r rm -f
-          sleep 86400
-        done
-    depends_on:
-      postgres:
-        condition: service_healthy
-
+      start_period: 30s
+      retries: 12
 volumes:
-  zoomz-postgres:
-  zoomz-files:
-  zoomz-backups:
+  postgres-data:
+  uploads:

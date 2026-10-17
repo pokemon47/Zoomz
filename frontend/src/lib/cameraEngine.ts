@@ -109,7 +109,7 @@ export class CameraEngine {
     const t = this.space.normalize(this.target, this.vp)
     const zoomed = { b: t.b, s: t.s * factor, x: px - (px - t.x) * factor, y: py - (py - t.y) * factor }
     const n = this.space.normalize(zoomed, this.vp)
-    this.target = this.space.clampScale(n, this.vp)
+    this.target = this.space.normalize(this.space.clampScale(n, this.vp, { x: px, y: py }), this.vp)
     if (this.reduced) {
       this.display = this.space.normalize(this.target, this.vp)
       this.track()
@@ -150,7 +150,7 @@ export class CameraEngine {
   zoomNow(px: number, py: number, factor: number) {
     const d = this.display
     const zoomed = { b: d.b, s: d.s * factor, x: px - (px - d.x) * factor, y: py - (py - d.y) * factor }
-    this.jumpTo(this.space.clampScale(this.space.normalize(zoomed, this.vp), this.vp))
+    this.jumpTo(this.space.clampScale(this.space.normalize(zoomed, this.vp), this.vp, { x: px, y: py }))
   }
 
   stop() {
