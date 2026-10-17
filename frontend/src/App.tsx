@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import { SpaceCanvas } from "@/components/space/SpaceCanvas"
 import { StatePanel } from "@/components/zoomboard/StatePanel"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -28,21 +28,12 @@ export default function App() {
     return () => ctrl.abort()
   }, [attempt])
 
-  // Session-only edits: positions live in memory until reload.
-  const moveNode = useCallback((id: string, x: number, y: number) => {
-    setLoad((prev) =>
-      prev.status === "ready"
-        ? { ...prev, scene: { ...prev.scene, nodes: prev.scene.nodes.map((n) => (n.id === id ? { ...n, x, y } : n)) } }
-        : prev,
-    )
-  }, [])
-
   return (
     <TooltipProvider delay={400}>
       <main className="relative h-full w-full overflow-hidden bg-canvas">
         <h1 className="sr-only">Zoomable Board</h1>
         {load.status === "ready" ? (
-          <SpaceCanvas scene={load.scene} onMoveNode={moveNode} />
+          <SpaceCanvas scene={load.scene} />
         ) : (
           <div className="zb-viewport grid place-items-center" style={{ backgroundSize: "24px 24px" }}>
             <div className="relative">

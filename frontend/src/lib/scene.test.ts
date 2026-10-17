@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest"
 import { lerpCam } from "./cameraEngine"
 import { SPACE, lodFor } from "./constants"
 import { indexScene, pathTo, previewImages } from "./scene"
-import { Space, covers, layout } from "./space"
+import { Space, covers, layout, lift, localFromScreen } from "./space"
+import { SCENERY, THEMES, layerMarkup, placeLayers } from "./scenery"
 import type { Scene } from "./types"
 
 const scene: Scene = {
@@ -87,9 +88,8 @@ describe("nested frames", () => {
 })
 
 describe("depth layout", () => {
-  it("draws a board's contents on its face only once it is big enough", () => {
-    const rootFit = space.fit("root", vp)
-    const far = layout(space, { ...rootFit, s: rootFit.s * 0.25, x: vp.w / 2, y: vp.h / 2 }, vp, { x: 0, y: 0 }, true)
+  it("shows a board's contents on its face unless the board is tiny on screen", () => {
+    const far = layout(space, { b: "root", s: 0.1, x: vp.w / 2, y: vp.h / 2 }, vp, { x: 0, y: 0 }, true)
     const near = layout(space, space.fit("a", vp), vp, { x: 0, y: 0 }, true)
     expect(far.items.some((i) => i.node.id === "a1")).toBe(false)
     expect(near.items.some((i) => i.node.id === "a1")).toBe(true)
@@ -126,5 +126,57 @@ describe("level of detail", () => {
     expect(lodFor("image", 200)).toBe("medium")
     expect(lodFor("image", 500)).toBe("close")
     expect(lodFor("note", 260)).toBe("close")
+  })
+})
+
+describe("session edits", () => {
+  it("re-parents a node and draws it in its new board", () => {
+    const local = new Space(indexScene(structuredClone(scene)), "root")
+    local.setParent("n", "a")
+    expect(local.node("n")!.parentId).toBe("a")
+    expect(local.index.children.get("root")!.some((c) => c.id === "n")).toBe(false)
+    expect(local.index.children.get("a")!.some((c) => c.id === "n")).toBe(true)
+  })
+
+  it("removes a board with everything inside it", () => {
+    const local = new Space(indexScene(structuredClone(scene)), "root")
+    const removed = local.removeNode("a").map((n) => n.id).sort()
+    expect(removed).toEqual(["a", "a1", "b", "b1"])
+    expect(local.node("b1")).toBeUndefined()
+  })
+
+  it("localFromScreen inverts the depth projection", () => {
+    const cam = { b: "root", s: 2, x: -100, y: 50 }
+    const pointer = { x: 0.4, y: -0.3 }
+    const z = 60
+    const { g, dx, dy } = lift(z, cam.s, pointer, true)
+    const local = { x: 123, y: 45 }
+    const baseX = local.x * cam.s + cam.x, baseY = local.y * cam.s + cam.y
+    const sx = vp.w / 2 + (baseX - vp.w / 2) * g + dx
+    const sy = vp.h / 2 + (baseY - vp.h / 2) * g + dy
+    const back = localFromScreen(cam, vp, z, sx, sy, pointer, true)
+    expect(back.x).toBeCloseTo(local.x)
+    expect(back.y).toBeCloseTo(local.y)
+    expect(back.screenScale).toBeCloseTo(cam.s * g)
+  })
+})
+
+describe("scenery", () => {
+  it("every theme with layers generates deterministic markup", () => {
+    for (const t of THEMES.filter((t) => t.layer)) {
+      const a = layerMarkup(t, 7)
+      expect(a.length).toBeGreaterThan(100)
+      expect(layerMarkup(t, 7)).toBe(a)
+    }
+  })
+
+  it("moving forward brings layers closer, and recycles them endlessly", () => {
+    const at = (z: number) => placeLayers(z, 0, 0, { x: 0, y: 0 }, 3000, 800, false)
+    const before = at(3).find((l) => l.n === 6)!
+    const after = at(4).find((l) => l.n === 6)!
+    expect(after.scale).toBeGreaterThan(before.scale)
+    const deep = at(250)
+    expect(deep.length).toBeGreaterThan(3)
+    expect(deep.every((l) => l.n - 250 > SCENERY.near && l.n - 250 <= SCENERY.far)).toBe(true)
   })
 })

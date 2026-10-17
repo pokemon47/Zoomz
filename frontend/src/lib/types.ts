@@ -1,4 +1,5 @@
 // Scene contract — mirrors backend/app/main.py (Scene, BoardNode, ImageNode, NoteNode).
+// FileNode exists only in the browser for files dropped during a session.
 
 export type BaseNode = {
   id: string
@@ -26,7 +27,13 @@ export type NoteNode = BaseNode & {
   content: { title: string; body: string }
 }
 
-export type SceneNode = BoardNode | ImageNode | NoteNode
+/** Client-only: a file the user dropped in this session (never sent to the API). */
+export type FileNode = BaseNode & {
+  type: "file"
+  content: { title: string; src: string; mime: string; size: number }
+}
+
+export type SceneNode = BoardNode | ImageNode | NoteNode | FileNode
 
 export type Scene = { rootBoardId: string; nodes: SceneNode[] }
 

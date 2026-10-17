@@ -150,6 +150,8 @@
   transition: background-color 400ms ease-out;
 }
 .zb-viewport.is-panning { cursor: grabbing; }
+/* keep the space's z-order to itself, so menus and dialogs always sit above it */
+.zb-space { isolation: isolate; }
 /* soft light pool so objects sit IN a space */
 .zb-viewport::before {
   content: "";
@@ -342,51 +344,168 @@
   pointer-events: none;
 }
 
-/* board face: the closed cover fades out, the floor of the level inside fades in */
-.zb-board { overflow: hidden; }
-.zb-cover {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  opacity: calc(1 - var(--reveal, 0) * 3.2);
+/* board face: always the (frosted) floor of the level inside — no covers */
+.zb-board {
+  overflow: hidden;
+  padding: 0;
+  background: transparent;
+  transition: box-shadow 220ms var(--zb-spring), outline-color 160ms ease-out;
 }
+.zb-board.is-lifted { box-shadow: 0 12px 0 0 var(--side), 0 36px 44px -16px var(--glow); }
+.zb-board.is-drop-target { outline: var(--focus) solid var(--cobalt); outline-offset: 4px; box-shadow: 0 8px 0 0 var(--side), 0 0 0 10px rgba(110, 139, 255, 0.18); }
 .zb-inner-floor {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  opacity: min(1, calc(var(--reveal, 0) * 3.2));
   pointer-events: none;
-}
-.zb-inner-floor::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
+  background-color: color-mix(in srgb, var(--floor-c) calc(var(--face-alpha, 1) * 100%), transparent);
   /* dot radius scales with the pitch so the inner floor matches the floor you land on */
   background-image: radial-gradient(var(--canvas-dot) calc(var(--dot) * 0.067), transparent calc(var(--dot) * 0.075));
   background-size: var(--dot) var(--dot);
 }
 .zb-inner-head {
   position: absolute;
-  left: var(--space-4);
-  right: var(--space-4);
+  left: 0;
+  right: 0;
   top: 0;
   height: 44px;
+  padding: 0 var(--space-4);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  opacity: min(1, calc(var(--reveal, 0) * 3.2));
-  pointer-events: none;
+  cursor: grab;
 }
+.is-dragging .zb-inner-head { cursor: grabbing; }
+.zb-head-meta { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.zb-grip { color: var(--ink-muted); opacity: 0.7; }
 .zb-inner-title { font: 800 17px/1 var(--zb-disp); letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* far away the title is counter-scaled so a small board still reads as a label */
+.zb-board.zb-far { overflow: visible; }
+.zb-board.zb-far .zb-inner-floor { overflow: hidden; }
+.zb-board.zb-far .zb-head-meta { display: none; }
+.zb-board.zb-far .zb-inner-head { top: auto; bottom: 100%; height: auto; padding: 0 0 6px; overflow: visible; }
+.zb-board.zb-far .zb-inner-title {
+  font-size: clamp(17px, calc(13px / var(--s, 1)), 90px);
+  overflow: visible;
+  /* a small chip so the label reads over any scenery */
+  background: var(--surface);
+  padding: 0.25em 0.55em 0.3em;
+  border-radius: 999px;
+  box-shadow: 0 0.12em 0 0 var(--surface-side);
+}
 .is-open .zb-card { cursor: inherit; }
-.zb-zoomin {
-  font: 700 11px/1 var(--zb-sans);
+.zb-level { background: var(--surface); color: var(--ink); }
+
+/* ---------- dropped files ---------- */
+.zb-file { padding: 8px; display: flex; flex-direction: column; }
+.zb-file-well {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--face);
+  box-shadow: inset 0 -4px 0 var(--side);
+}
+.zb-file-icon { width: 38%; height: 38%; color: #17131f; opacity: 0.85; }
+.zb-file-video { width: 100%; height: 100%; object-fit: cover; display: block; background: #17131f; pointer-events: none; }
+.zb-file-tab {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  padding: 4px 8px;
+  border-radius: var(--radius-full);
+  font: 800 11px/1 var(--zb-sans);
+  letter-spacing: 0.04em;
+  color: #17131f;
+  background: var(--face);
+  box-shadow: 0 2px 0 0 var(--side);
+}
+.zb-file-meta .zb-cap { padding-top: 8px; }
+.zb-file-row { display: flex; justify-content: space-between; align-items: center; padding: 0 4px 2px; }
+.zb-file-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 700 12px/1 var(--zb-sans);
+  color: var(--on-cobalt);
+  background: var(--cobalt);
   padding: 6px 10px;
   border-radius: var(--radius-full);
-  background: var(--surface-sunk);
-  color: var(--ink-muted);
-  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.07);
+  text-decoration: none;
+  box-shadow: 0 3px 0 0 var(--cobalt-side);
 }
-.zb-level { background: var(--surface); color: var(--ink); }
+.zb-file-open:active { transform: translateY(2px); box-shadow: 0 1px 0 0 var(--cobalt-side); }
+
+/* ---------- scenery ---------- */
+.zb-scenery { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.zb-scene-layer { position: absolute; transform-origin: 50% 50%; pointer-events: none; }
+.zb-scene-svg { display: block; width: 100%; height: 100%; overflow: visible; }
+/* the floor of whichever board you're standing in (frosted when there's scenery) */
+.zb-floor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-color: color-mix(in srgb, var(--floor) calc(var(--floor-alpha, 1) * 100%), transparent);
+}
+
+/* scenery picker */
+.zb-picker { display: inline-flex; align-items: center; gap: 6px; padding: 6px; border-radius: var(--radius-full); box-shadow: var(--zb-l2); background: var(--surface); }
+.zb-picker-label { font: 700 12px/1 var(--zb-sans); color: var(--ink-muted); padding: 0 6px 0 8px; }
+.zb-swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 3px 0 0 var(--surface-side), inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  transition: transform 200ms var(--zb-spring), box-shadow 200ms var(--zb-spring);
+}
+.zb-swatch:hover { transform: translateY(-2px); }
+.zb-swatch:active { transform: translateY(2px); box-shadow: 0 1px 0 0 var(--surface-side); }
+.zb-swatch[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--surface), 0 0 0 6px var(--cobalt); }
+.zb-swatch:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 4px; }
+.zb-chrome-tr { position: absolute; top: var(--space-4); right: var(--space-4); z-index: 20; display: flex; gap: var(--space-3); align-items: center; }
+
+/* ---------- menus & dialogs (shadcn, restyled: matte faces, lift shadows, no outlines) ---------- */
+.zb-menu { min-width: 220px; padding: 6px; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--zb-l2); border: 0; outline: none; }
+.zb-menu-item { gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); font: 600 14px/1 var(--zb-sans); color: var(--ink); cursor: pointer; }
+.zb-menu-item svg { width: 18px; height: 18px; }
+.zb-menu-item[data-highlighted] { background: var(--surface-sunk); }
+.zb-dialog { max-width: 420px; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--zb-l2); border: 0; outline: none; color: var(--ink); }
+.zb-dialog-title { font: 800 24px/28px var(--zb-disp); letter-spacing: -0.01em; }
+.zb-dialog-footer { display: flex; justify-content: flex-end; gap: var(--space-2); background: transparent; border: 0; margin: 0; padding: 0; }
+.zb-field { display: flex; flex-direction: column; gap: 6px; font: 700 13px/1 var(--zb-sans); color: var(--ink-muted); }
+.zb-field input, .zb-field textarea {
+  font: 500 15px/22px var(--zb-sans);
+  color: var(--ink);
+  background: var(--surface-sunk);
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.08);
+  resize: vertical;
+}
+.zb-field input:focus-visible, .zb-field textarea:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 2px; }
+
+/* file drop: the target board glows, a pill says where it lands */
+.zb-dropzone {
+  position: absolute;
+  inset: 0;
+  z-index: 45000;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 4px rgba(110, 139, 255, 0.55), inset 0 0 80px rgba(110, 139, 255, 0.25);
+  border-radius: 0;
+  display: grid;
+  place-items: start center;
+  padding-top: 84px;
+}
+.zb-drop-pill { font: 700 14px/1 var(--zb-sans); padding: 12px 18px; border-radius: var(--radius-full); color: var(--on-cobalt); box-shadow: var(--zb-l2); }
+
+@media (max-width: 1000px) {
+  .zb-chrome-tr { top: auto; bottom: 84px; flex-direction: column-reverse; align-items: flex-end; }
+}

@@ -31,12 +31,28 @@ export class CameraEngine {
   space: Space
   vp: Viewport
   reduced = false
+  /** Distance travelled, for the scenery: ln(total zoom) and screen-px pan. Unbounded. */
+  travel = { zoom: 0, x: 0, y: 0 }
+  private last: Cam | null = null
 
   constructor(space: Space, vp: Viewport, initial: Cam) {
     this.space = space
     this.vp = vp
     this.display = space.normalize(initial, vp)
     this.target = this.display
+    this.last = this.display
+  }
+
+  /** Accumulate how the displayed camera moved since last call, frame-independently. */
+  private track() {
+    const prev = this.last ? this.space.toFrame(this.last, this.display.b) : this.display
+    const d = this.display
+    const cx = this.vp.w / 2, cy = this.vp.h / 2
+    this.travel.zoom += Math.log(d.s / prev.s)
+    // How far the world point at screen centre moved, in current screen px.
+    this.travel.x += ((cx - d.x) / d.s - (cx - prev.x) / prev.s) * d.s
+    this.travel.y += ((cy - d.y) / d.s - (cy - prev.y) / prev.s) * d.s
+    this.last = d
   }
 
   setViewport(vp: Viewport) {
@@ -69,6 +85,7 @@ export class CameraEngine {
       y: this.pointer.y + (this.pointerTarget.y - this.pointer.y) * pa,
     }
     if (Math.abs(this.pointer.x - this.pointerTarget.x) > 0.001 || Math.abs(this.pointer.y - this.pointerTarget.y) > 0.001) moving = true
+    this.track()
     return moving
   }
 
@@ -80,6 +97,7 @@ export class CameraEngine {
     this.display = this.space.normalize({ ...this.display, x: this.display.x + dx, y: this.display.y + dy }, vp)
     const t2 = this.space.toFrame({ ...tgt, x: tgt.x + dx, y: tgt.y + dy }, this.display.b)
     this.target = this.space.normalize(t2, vp)
+    this.track()
   }
 
   /** Zoom the target around a screen point; the display glides after it. */
@@ -92,7 +110,10 @@ export class CameraEngine {
     const zoomed = { b: t.b, s: t.s * factor, x: px - (px - t.x) * factor, y: py - (py - t.y) * factor }
     const n = this.space.normalize(zoomed, this.vp)
     this.target = this.space.clampScale(n, this.vp)
-    if (this.reduced) this.display = this.space.normalize(this.target, this.vp)
+    if (this.reduced) {
+      this.display = this.space.normalize(this.target, this.vp)
+      this.track()
+    }
   }
 
   /** Fly to a camera expressed in any board's frame. */
@@ -101,6 +122,7 @@ export class CameraEngine {
       this.flight = null
       this.display = this.space.normalize(to, this.vp)
       this.target = this.display
+      this.track()
       return
     }
     const from = this.space.toFrame(this.display, to.b)

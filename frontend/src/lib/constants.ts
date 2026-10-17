@@ -11,10 +11,14 @@ export const SPACE = {
   passFadeEnd: 3.2,
   /** Below this perspective denominator a thing is behind the camera (skip). */
   passDenom: 0.12,
-  /** A board starts drawing its contents on its face when it spans this fraction of the viewport… */
-  revealStart: 0.16,
-  /** …and its contents are fully in focus (cover gone) here. */
-  revealEnd: 0.42,
+  /** A board draws its contents once its card is this many px on screen (smaller = just the face)… */
+  contentsFrom: 56,
+  /** …fully faded in by here. */
+  contentsFull: 120,
+  /** You are "in" a board (breadcrumbs) once it spans this fraction of the viewport around its centre. */
+  focusSpan: 0.42,
+  /** Board faces let this much scenery through (frosted acrylic); 1 = opaque. */
+  faceAlpha: 0.84,
   /** Card face layout (local units): padding and title header above the content window. */
   facePad: 14,
   faceHeader: 44,
@@ -56,6 +60,7 @@ export const CAMERA = {
 export function lodFor(type: SceneNode["type"], screenW: number): LOD {
   if (type === "image") return screenW < 90 ? "far" : screenW > 380 ? "close" : "medium"
   if (type === "note") return screenW < 120 ? "far" : screenW > 200 ? "close" : "medium"
+  if (type === "file") return screenW < 100 ? "far" : screenW > 320 ? "close" : "medium"
   return screenW < 170 ? "far" : screenW > 520 ? "close" : "medium"
 }
 

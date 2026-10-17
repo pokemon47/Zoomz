@@ -72,6 +72,70 @@ export class Space {
     return this.index.byId.get(id)?.parentId ?? null
   }
 
+  // ---------- session edits (the index is mutated in place) ----------
+
+  /** Move a node under another board, keeping everything else where it is. */
+  setParent(id: string, parentId: string) {
+    const n = this.index.byId.get(id)
+    if (!n || n.parentId === parentId) return
+    if (n.parentId) {
+      const list = this.index.children.get(n.parentId)
+      if (list) list.splice(list.indexOf(n), 1)
+    }
+    const moved = { ...n, parentId } as SceneNode
+    this.index.byId.set(id, moved)
+    const list = this.index.children.get(parentId) ?? []
+    list.push(moved)
+    this.index.children.set(parentId, list)
+  }
+
+  addNode(n: SceneNode) {
+    this.index.byId.set(n.id, n)
+    if (n.parentId) {
+      const list = this.index.children.get(n.parentId) ?? []
+      list.push(n)
+      this.index.children.set(n.parentId, list)
+    }
+  }
+
+  /** Remove a node (and, for boards, everything inside). Returns removed nodes. */
+  removeNode(id: string): SceneNode[] {
+    const n = this.index.byId.get(id)
+    if (!n || !n.parentId) return []
+    const removed: SceneNode[] = []
+    const drop = (node: SceneNode) => {
+      removed.push(node)
+      for (const kid of [...(this.index.children.get(node.id) ?? [])]) drop(kid)
+      this.index.children.delete(node.id)
+      this.index.byId.delete(node.id)
+      this.pos.delete(node.id)
+    }
+    const list = this.index.children.get(n.parentId)
+    if (list) list.splice(list.indexOf(n), 1)
+    drop(n)
+    return removed
+  }
+
+  /** Replace a node's data (e.g. edited text), keeping its place in the tree. */
+  updateNode(n: SceneNode) {
+    const old = this.index.byId.get(n.id)
+    if (!old) return
+    this.index.byId.set(n.id, n)
+    const list = old.parentId ? this.index.children.get(old.parentId) : undefined
+    if (list) list[list.indexOf(old)] = n
+  }
+
+  setPos(id: string, x: number, y: number) {
+    this.pos.set(id, { x, y })
+  }
+
+  /** Where a child board's local origin sits on its own card, in card-local px. */
+  innerOrigin(boardId: string): { k: number; ox: number; oy: number } {
+    const f = this.frameOf(boardId)
+    const p = this.at(this.index.byId.get(boardId)!)
+    return { k: f.k, ox: f.ax - p.x, oy: f.ay - p.y }
+  }
+
   boundsOf(boardId: string): Rect {
     let b = this.bounds.get(boardId)
     if (!b) {
@@ -219,7 +283,7 @@ export type Placed = {
   g: number
   opacity: number
   lod: LOD
-  /** Boards: 0 = closed cover, 1 = contents fully drawn on the face. */
+  /** Boards: how visible its contents are on the face (0 = too small to draw). */
   reveal: number
   /** Paint order. */
   order: number
@@ -263,23 +327,21 @@ export function layout(space: Space, cam: Cam, vp: Viewport, pointer: Pointer, p
         const w = n.w * c.s, h = n.h * c.s
         if (baseX > vp.w + margin || baseY > vp.h + margin || baseX + w < -margin || baseY + h < -margin) continue
         const span = Math.min(w / vp.w, h / vp.h)
-        const reveal = smooth(SPACE.revealStart, SPACE.revealEnd, span)
+        // No covers: a board always shows what's inside; only tiny far-away cards skip it.
+        const reveal = smooth(SPACE.contentsFrom, SPACE.contentsFull, Math.min(w, h))
         items.push({ node: n, level, x: baseX, y: baseY, scale: c.s, g: 1, opacity: inherited, lod: lodFor("board", w), reveal, order: order++ })
-        if (reveal > 0.55 && level + 1 > focusLevel && baseX < cx && baseY < cy && baseX + w > cx && baseY + h > cy) {
+        if (span >= SPACE.focusSpan && level + 1 > focusLevel && baseX < cx && baseY < cy && baseX + w > cx && baseY + h > cy) {
           focus = n.id
           focusLevel = level + 1
         }
-        if (reveal > 0.12) visit(n.id, space.toChild(c, n.id), level + 1, inherited * smooth(0.12, 0.55, reveal))
+        if (reveal > 0) visit(n.id, space.toChild(c, n.id), level + 1, inherited * reveal)
         continue
       }
       // Raised things: perspective about the viewport centre plus pointer parallax.
-      const height = (n.z ?? 0) * c.s
-      const denom = 1 - height / SPACE.eye
-      if (denom <= SPACE.passDenom) continue // already behind the camera
-      const g = 1 / denom
-      const shift = parallax ? height * SPACE.pointerParallax : 0
-      const x = cx + (baseX - cx) * g - pointer.x * shift
-      const y = cy + (baseY - cy) * g - pointer.y * shift * 0.7
+      if (1 - ((n.z ?? 0) * c.s) / SPACE.eye <= SPACE.passDenom) continue // already behind the camera
+      const { g, dx, dy } = lift(n.z ?? 0, c.s, pointer, parallax)
+      const x = cx + (baseX - cx) * g + dx
+      const y = cy + (baseY - cy) * g + dy
       const s = c.s * g
       const w = n.w * s, h = n.h * s
       if (x > vp.w + margin || y > vp.h + margin || x + w < -margin || y + h < -margin) continue
@@ -296,7 +358,24 @@ export function layout(space: Space, cam: Cam, vp: Viewport, pointer: Pointer, p
 }
 
 function rank(n: SceneNode): number {
-  return n.type === "board" ? 0 : n.type === "image" ? 1 : 2
+  return n.type === "board" ? 0 : n.type === "note" ? 2 : 1
+}
+
+/** Perspective boost and pointer drift for something `z` high in a frame of scale s. */
+export function lift(z: number, s: number, pointer: Pointer, parallax: boolean) {
+  const height = z * s
+  const denom = Math.max(SPACE.passDenom, 1 - height / SPACE.eye)
+  const shift = parallax ? height * SPACE.pointerParallax : 0
+  return { g: 1 / denom, dx: -pointer.x * shift, dy: -pointer.y * shift * 0.7 }
+}
+
+/** Inverse of layout's projection: which local top-left puts a raised node's top-left at (sx, sy). */
+export function localFromScreen(c: Cam, vp: Viewport, z: number, sx: number, sy: number, pointer: Pointer, parallax: boolean) {
+  const { g, dx, dy } = lift(z, c.s, pointer, parallax)
+  const cx = vp.w / 2, cy = vp.h / 2
+  const baseX = cx + (sx - dx - cx) / g
+  const baseY = cy + (sy - dy - cy) / g
+  return { x: (baseX - c.x) / c.s, y: (baseY - c.y) / c.s, screenScale: c.s * g }
 }
 
 export function isBoard(n: SceneNode): n is BoardNode {
