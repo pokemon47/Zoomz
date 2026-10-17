@@ -4,9 +4,16 @@ Scrolling replaced with zooming. A moodboard you walk into: one continuous 2.5D 
 
 - **Original contract:** [`Zoomable_Board_POC_PRD.md`](Zoomable_Board_POC_PRD.md) (see [Deliberate changes](#deliberate-changes-from-the-prd))
 - **Visual direction:** the Zoomboard design system in [`docs/design-system/`](docs/design-system/README.md)
-A collaborative moodboard you can pan and zoom through. Nested boards show their actual contents. The existing React/TypeScript/Vite frontend, FastAPI backend, camera, artwork, and interaction design are preserved.
+- **Development guidance:** [AGENTS.md](AGENTS.md) and the [codebase overview](docs/CODEBASE_OVERVIEW.md)
 
-See [AGENTS.md](AGENTS.md) and the [codebase overview](docs/CODEBASE_OVERVIEW.md) for development guidance.
+```
+frontend/            React + TypeScript + Vite, Tailwind v4, shadcn/ui, Motion
+backend/             FastAPI, SQLAlchemy + Alembic (Postgres; SQLite locally), WebSockets
+deploy/              nginx config, container entrypoint, backups, manifest check
+Dockerfile           One app image: built frontend + nginx + the API
+zenith-compose.yml   The published Zenith manifest
+.github/workflows/   CI: tests (SQLite + Postgres), lint, build, containers, backups
+```
 
 ## Local development
 
@@ -18,11 +25,6 @@ python3.12 -m venv .venv
 .venv/bin/pip install -r requirements.lock -r requirements-dev.txt
 .venv/bin/uvicorn app.main:app --port 8000 --no-access-log
 ```
-frontend/            React + TypeScript + Vite, Tailwind v4, shadcn/ui, Motion — served by nginx in production
-backend/             FastAPI, SQLAlchemy + Alembic (Postgres; SQLite locally), WebSockets
-zenith-compose.yml   Deployment on Zenith: web, api, postgres, nightly backups, storage volumes
-.github/workflows/   Tests (SQLite + Postgres), lint, build, manifest check, image publishing
-docs/                Design system tokens, reference components, handoff notes
 
 ```sh
 cd frontend
@@ -30,12 +32,11 @@ npm ci
 npm run dev
 ```
 
-Open http://localhost:5173. Vite proxies HTTP and WebSocket API traffic to port 8000. The default database is SQLite at `backend/data/zoomz.db`; uploads live in `backend/data/files`.
+Open http://localhost:5173 and sign in with any email. Your first sign-in creates an account with a personal workspace and a copy of the demo board. Vite proxies `/api`, including the live WebSocket, to `http://127.0.0.1:8000` (override with `VITE_API_PROXY_TARGET`). **/demo** opens the original demo board without an account; your changes there stay in the browser.
 
-You need **Python 3.9+** and **Node 20+**. Run each in its own terminal.
-Without SMTP, development sign-in and invitation responses contain a `devLink`. Email bodies and tokens are not logged. This fallback is forbidden in production. Local mail delivery can use the same SMTP variables as production.
+The default database is SQLite at `backend/data/zoomz.db` (migrated automatically on start); uploads live in `backend/data/files`. Without SMTP, development sign-in and invitation responses contain a `devLink`, shown on the sign-in page. Email bodies and tokens are not logged. This fallback is forbidden in production.
 
-Signed-in spaces persist edits/uploads on the server. `/demo` permits memory-only changes and resets on reload. Wheel zooms; floor drag pans; breadcrumbs/Escape go up; `0` fits. Drag cards across visible boards. Double-click images to frame them; editable notes open their editor. Add/drop/paste, search (Cmd/Ctrl+K), resize, undo/redo, and minimap are available.
+Optional local extras: `ffmpeg` on your PATH enables video posters and transcodes. Setting `PUBLIC_URL=http://localhost:5173` for the API makes emailed links point at the dev server.
 
 ## Checks
 
@@ -49,8 +50,50 @@ npm run build
 npm audit --omit=dev --audit-level=high
 ```
 
-Locally the API uses a SQLite file and stores uploads in `backend/data/` (both git-ignored). It creates the tables itself on start. Without a mail server it doesn't send sign-in emails: the sign-in page shows the link directly, and the API log prints it.
 GitHub Actions runs SQLite tests, PostgreSQL migrations and tests, frontend checks, container builds, nginx/WebSocket checks, and paired database/media backup recovery into a fresh project. CI must pass before deployment; configuring a workflow is not evidence it has run.
+
+## What you can do
+
+**Moving around.** There are no folders to open. Every board shows what's inside it on its face, so you just keep moving toward what you want.
+
+| Action | Mouse / trackpad | Keyboard |
+| --- | --- | --- |
+| Move closer / further | Scroll, two-finger scroll, or pinch (also on touch screens) | `+` / `-` |
+| Pan | Drag the floor or a board's face | Arrow keys |
+| Step inside a board | Keep zooming toward it | Tab to it, then Enter |
+| Fly to anything | Double-click it, or ⌘K search | Enter |
+| Go up a level | Breadcrumbs or Back | Escape |
+| Frame the current board | **Fit board** | `0` |
+| Jump somewhere on this board | Click or drag in the minimap | — |
+| Move the path bar, zoom controls or map | Drag their grip | Grip + arrow keys |
+
+**Editing.** Edits save instantly and appear for everyone on the board.
+
+| Action | How |
+| --- | --- |
+| Add images, videos, PDFs, any file | Drop them on any board, paste with ⌘V, or **Add → Images & files…** (upload progress is shown on the card) |
+| Add a link | Paste a URL. Links get a preview; YouTube, Vimeo and Figma play in place up close |
+| New note / board | **Add**, or `N` / `B`. Pasting plain text also makes a note. Notes have no length limit: the text sizes itself to fill the note (a few words are big, a long note is small) and stays readable in the lightbox |
+| Edit text | Double-click a note, or a board's title strip (Enter also edits a focused note) |
+| Move | Drag. Dropping onto another board moves the card *into* it, at that level's size |
+| Move a board | Drag its title strip (small boards: drag anywhere) |
+| Resize | Select one card and drag the blue corner grip (images keep their shape; Shift frees it) |
+| Select several | Shift-click, or Shift-drag on the floor for a marquee; ⌘A selects everything on this board |
+| Copy / cut / paste / duplicate | ⌘C / ⌘X / ⌘V / ⌘D. This works across boards and spaces; files are copied along |
+| Delete | Delete or Backspace |
+| Undo / redo your own changes | ⌘Z / ⇧⌘Z |
+
+**Working together.** Everyone on a board appears as an avatar in the top bar, with a live, named cursor. Click someone's avatar to follow their view; scroll or drag to stop. Cards other people are dragging move live. Being offline is fine: your edits queue and send when you reconnect, and the status pill shows anything unsaved.
+
+**Sharing** (owners, via **Share**):
+
+- **Invite by email** as an editor or viewer. The invite only works for that email address.
+- **Join link:** anyone with it who signs in gets the access you pick. It can expire after 1, 7 or 30 days, and you can turn it off at any time.
+- **Public link:** view-only, no account needed.
+- **Per-board access:** give a member a different role inside one board and everything in it. For example, someone can edit the whole space but only view the "Final picks" board.
+- **Team workspaces:** members see every board in the workspace with their workspace role. A person's role is the higher of their workspace role and their board-space role.
+
+**Your account** (Settings): change your name and cursor colour, choose **Light**, **Dark** or **System** appearance (remembered per browser, applied before the page paints), download all your data as a zip, or delete your account along with everything in the workspaces you created.
 
 ## Production configuration
 
@@ -92,52 +135,6 @@ docker compose --env-file .env.production -p zoomz -f compose.production.yml up 
 curl --fail http://127.0.0.1:8080/api/health
 ```
 
-Open http://localhost:5173 and sign in with any email. Your first sign-in creates an account with a personal workspace and a copy of the demo board. Vite proxies `/api`, including the live WebSocket, to `http://127.0.0.1:8000` (override with `VITE_API_PROXY_TARGET`). **/demo** opens the original demo board without an account; your changes there stay in the browser.
-
-Optional local extras: `ffmpeg` on your PATH enables video posters and transcodes. Setting `PUBLIC_URL=http://localhost:5173` for the API makes emailed links point at the dev server.
-
-## What you can do
-
-**Moving around.** There are no folders to open. Every board shows what's inside it on its face, so you just keep moving toward what you want.
-
-| Action | Mouse / trackpad | Keyboard |
-| --- | --- | --- |
-| Move closer / further | Scroll, two-finger scroll, or pinch (also on touch screens) | `+` / `-` |
-| Pan | Drag the floor or a board's face | Arrow keys |
-| Step inside a board | Keep zooming toward it | Tab to it, then Enter |
-| Fly to anything | Double-click it, or ⌘K search | Enter |
-| Go up a level | Breadcrumbs or Back | Escape |
-| Frame the current board | **Fit board** | `0` |
-| Jump somewhere on this board | Click or drag in the minimap | — |
-| Move the path bar, zoom controls or map | Drag their grip | Grip + arrow keys |
-
-**Editing.** Edits save instantly and appear for everyone on the board.
-
-| Action | How |
-| --- | --- |
-| Add images, videos, PDFs, any file | Drop them on any board, paste with ⌘V, or **Add → Images & files…** (upload progress is shown on the card) |
-| Add a link | Paste a URL. Links get a preview; YouTube, Vimeo and Figma play in place up close |
-| New note / board | **Add**, or `N` / `B`. Pasting plain text also makes a note |
-| Edit text | Double-click a note, or a board's title strip (Enter also edits a focused note) |
-| Move | Drag. Dropping onto another board moves the card *into* it, at that level's size |
-| Move a board | Drag its title strip (small boards: drag anywhere) |
-| Resize | Select one card and drag the blue corner grip (images keep their shape; Shift frees it) |
-| Select several | Shift-click, or Shift-drag on the floor for a marquee; ⌘A selects everything on this board |
-| Copy / cut / paste / duplicate | ⌘C / ⌘X / ⌘V / ⌘D. This works across boards and spaces; files are copied along |
-| Delete | Delete or Backspace |
-| Undo / redo your own changes | ⌘Z / ⇧⌘Z |
-
-**Working together.** Everyone on a board appears as an avatar in the top bar, with a live, named cursor. Click someone's avatar to follow their view; scroll or drag to stop. Cards other people are dragging move live. Being offline is fine: your edits queue and send when you reconnect, and the status pill shows anything unsaved.
-
-**Sharing** (owners, via **Share**):
-
-- **Invite by email** as an editor or viewer. The invite only works for that email address.
-- **Join link:** anyone with it who signs in gets the access you pick. It can expire after 1, 7 or 30 days, and you can turn it off at any time.
-- **Public link:** view-only, no account needed.
-- **Per-board access:** give a member a different role inside one board and everything in it. For example, someone can edit the whole space but only view the "Final picks" board.
-- **Team workspaces:** members see every board in the workspace with their workspace role. A person's role is the higher of their workspace role and their board-space role.
-
-**Your account** (Settings): change your name and cursor colour, download all your data as a zip, or delete your account along with everything in the workspaces you created.
 The backend checks media writability, runs `alembic upgrade head`, then starts Uvicorn without reload or URL access logging. Keep exactly **one backend replica and one worker**; live rooms and rate limits are process-local. PostgreSQL uses connection pre-ping and locks each space before applying edits/allocating sequence numbers.
 
 For an explicit migration with a configured environment, from `backend/`:
@@ -153,42 +150,68 @@ Keep the `postgres-data` and `uploads` volumes across updates. Never run `docker
 
 Frontend builds contain no SMTP, database, or OAuth secrets and use same-origin API URLs. Do not set secret `VITE_*` variables. Backend runtime dependencies are pinned in `requirements.lock`; review/regenerate that file when requirements change.
 
-## Zenith deployment handoff
-
-```bash
-cd backend && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/python -m pytest -q   # 31 API tests
-cd frontend && npx tsc -b && npm test && npx oxlint src && npm run build                         # types, 16 unit tests, lint, build
-python3 scripts/check-zenith.py                                                                  # deployment manifest rules
-```
-
-CI (`.github/workflows/ci.yml`) runs all of this on every push. The backend suite runs twice, against SQLite and against real Postgres, after `alembic upgrade head && alembic check`. On pushes it then builds and publishes `ghcr.io/<owner>/zoomz-api` and `zoomz-web`.
-
 ## Deploying on Zenith
 
-Zenith runs the services in [`zenith-compose.yml`](zenith-compose.yml):
+The [official Compose reference](https://docs.zenith.hosting/content/zenith-compose-reference.md) documents the mappings used by `zenith-compose.yml`:
 
-| Service | What it is |
-| --- | --- |
-| `web` | nginx with the built app. It's the only public port (8080), and it forwards `/api` and the live WebSockets to `api`. It sets the app's security headers (CSP, frame and referrer policies). |
-| `api` | FastAPI. Runs migrations on start, stores uploads on the **Uploaded files** volume, and runs ffmpeg for videos. It starts as root only to take ownership of that volume, then drops to an unprivileged user. |
-| `postgres` | The database, on the **Database** volume. |
-| `backup` | `pg_dump` once a day to the **Database backups** volume, keeping the last 14. |
+- `PUBLIC_URL` aliases `ZENITH_PUBLIC_URL`.
+- SMTP host/port/user/password/from alias `ZENITH_SMTP_HOST`, `ZENITH_SMTP_PORT`, `ZENITH_SMTP_USER`, `ZENITH_SMTP_PASS`, and `ZENITH_SMTP_FROM`, scoped only to `app`. The documented relay uses port 587 and STARTTLS.
+- A generated database password goes to PostgreSQL and the app's database URL. A separate generated stable signing key goes only to the app.
+- Private storage declarations cover PostgreSQL and uploaded media.
+- The only public endpoint is app port 8080. Zenith terminates HTTPS. Public image dependencies and one root `build: .` app follow the [container guide](https://docs.zenith.hosting/content/containerise.md).
 
-Secrets are generated by Zenith (`SECRET_KEY`, `POSTGRES_PASSWORD`), and `PUBLIC_URL` comes from `ZENITH_PUBLIC_URL`. When deploying you fill in the SMTP server and *From* address (required, since sign-in is by email). Google sign-in, Sentry and the upload limits are optional.
+Validation actually performed: Docker Compose parses the manifest; both schemas supplied by the official skill pass; the npm CLI's published schema and applicable semantic checks pass via `deploy/check_manifest.mjs`.
 
-**Steps**
+`NO_COLOR=1 zenith check --upload-size` was also run with npm CLI **0.1.4** and **fails** its stricter preview policy on the published `env` and `storage` blocks. The supplied skill schemas describe broader preview behavior than that npm release. This does not prove the published manifest invalid, nor does schema success prove server acceptance. No preview variant was created that drops required SMTP/secrets. Verify the target server/CLI compatibility before an authorized preview.
 
-1. Push to `main`. CI tests everything and publishes `ghcr.io/pokemon47/zoomz-api:main` and `zoomz-web:main`.
-2. In GitHub, under Packages, make both packages **public** so Zenith can pull them anonymously.
-3. Optional but recommended: pin both images in `zenith-compose.yml` to the `@sha256:` digests CI printed, so a deployment never changes underneath you. Merge that.
-4. Submit the repository on Zenith's **Publish an app** page, then deploy and enter the SMTP settings.
-5. For Google sign-in, create an OAuth client with redirect URI `https://<your domain>/api/auth/google/callback` and set the two `GOOGLE_*` values.
+Next operator actions:
 
-**Manifest caveat:** Zenith's public developer page names `zenith-compose.yml` but doesn't publish its schema. This file follows the conventions in published Zenith submissions (`x-zenith` catalog, expose, storage, env with `generate` / `template` / `alias` / `input`), and `scripts/check-zenith.py` enforces the rules those submissions follow. Zenith's review is the final word.
+1. Let the CI container/PostgreSQL/recovery checks pass, or run their commands with a running Docker daemon.
+2. Confirm Zenith volume ownership supports UID/GID 10001, identify the exact ingress CIDR for `TRUSTED_PROXY_CIDR`, and arrange independent backups.
+3. Confirm catalogue licensing before publication. No license file exists; the manifest accurately says `UNLICENSED` and does not grant a new license.
+4. With explicit permission, commit/push the reviewed files to the public repository and complete Zenith account/GitHub/Developer Agreement prerequisites. Then follow the [official publishing workflow](https://docs.zenith.hosting/content/publish.md), which builds the pinned GitHub source without requiring a separately published app image.
+5. Once provisioned, run every acceptance check below, especially actual SMTP delivery and restore. No credentials need to be copied into source.
 
-**Restoring a backup:** copy a dump out of the backups volume and run `pg_restore --clean --if-exists -d zoomz <file>` against the database.
+No authentication, preview upload, image publication, commit, push, or deployment was performed. Manifest server admission and the real instance's SMTP, ingress, volume permissions, and backup facilities remain unverified.
 
-**Optional virus scanning:** run a ClamAV daemon and set `CLAMAV_ADDRESS=host:3310` on `api`. Uploads are then scanned before they're stored. It isn't in the manifest by default because ClamAV needs about 1.5 GB of memory and several minutes to load its signatures. If it's configured but unreachable, uploads are refused rather than stored unscanned.
+**Optional virus scanning:** run a ClamAV daemon and set `CLAMAV_ADDRESS=host:3310` on the app. Uploads are then scanned before they're stored; if it's configured but unreachable, uploads are refused rather than stored unscanned. It isn't in the manifest by default because ClamAV needs about 1.5 GB of memory.
+
+## Backups and recovery
+
+`deploy/backup.py` requires Python 3.12+, Docker Compose, and operator access. It briefly stops the single app writer, dumps PostgreSQL, archives all media, includes SHA-256 checksums, then restarts the backend if it was running. Backups use private permissions. Retention defaults to seven days and deletes only matching older backup files after a successful new archive.
+
+```sh
+backend/.venv/bin/python deploy/backup.py --project zoomz backup /mnt/independent-backups/zoomz --keep-days 7
+```
+
+Schedule this daily through an available operator/hosting scheduler. Copy completed archives to encrypted off-host storage with its own seven-day-or-longer retention. A second directory or volume on the same failed host is not disaster recovery. Restrict access: the archive contains user content and account data. Keep configuration secrets separately in a secure store.
+
+**Before accepting real user data, confirm the scheduler, independent destination, copy-failure alert, and restore drill.** These hosting-specific facilities are not configured here. If Zenith gives no Compose/operator access, arrange its supported database-and-media backup/export mechanism instead. Database-only snapshots are insufficient.
+
+Restore only a trusted archive into an **empty recovery project with fresh volumes**, using a separately prepared recovery environment and a different `WEB_PORT`. The utility refuses populated database/media targets and does not erase existing volumes.
+
+```sh
+# Build the recovery images first.
+docker compose --env-file .env.recovery -p zoomz-recovery -f compose.production.yml build
+backend/.venv/bin/python deploy/backup.py --env-file .env.recovery --project zoomz-recovery restore /path/to/zoomz-backup-TIMESTAMP-ID.tar --confirm-empty-target
+docker compose --env-file .env.recovery -p zoomz-recovery -f compose.production.yml up -d --wait
+```
+
+Run the acceptance checks before switching traffic. Keep the original project intact until recovery is verified. An unsuccessful restore may leave a partial recovery target; inspect it and use new empty recovery volumes for another attempt.
+
+## Deployment acceptance checklist
+
+- [ ] Frontend and a directly loaded nested URL work over the correct public HTTPS origin.
+- [ ] `/api/health` succeeds; production API docs are disabled.
+- [ ] A new user receives and completes a Zenith SMTP magic-link sign-in.
+- [ ] An existing user sends an invitation; its recipient joins with the intended role.
+- [ ] A space can be edited and changes survive reload.
+- [ ] Upload an image and confirm the original/preview remain after backend restart.
+- [ ] Two browser sessions see edits and cursors through the production WebSocket proxy.
+- [ ] Viewers/strangers cannot edit or access private files; production cookies are Secure/HttpOnly.
+- [ ] Database and uploads survive container recreation with the same volumes.
+- [ ] A scheduled paired backup reaches independent storage and is restored successfully.
+- [ ] Ingress/application logs contain no sign-in tokens, SMTP credentials, or cookie values.
 
 ## How it works
 
@@ -238,64 +261,7 @@ Secrets are generated by Zenith (`SECRET_KEY`, `POSTGRES_PASSWORD`), and `PUBLIC
 - Terms and Privacy pages are drafts and must be reviewed by a lawyer before launch. Billing isn't included.
 - Postgres, ffmpeg and the Docker images are exercised in CI, not on the original development machine.
 - Fonts load from Google Fonts; offline, the UI falls back to system fonts.
-The [official Compose reference](https://docs.zenith.hosting/content/zenith-compose-reference.md) documents the mappings used by `zenith-compose.yml`:
-
-- `PUBLIC_URL` aliases `ZENITH_PUBLIC_URL`.
-- SMTP host/port/user/password/from alias `ZENITH_SMTP_HOST`, `ZENITH_SMTP_PORT`, `ZENITH_SMTP_USER`, `ZENITH_SMTP_PASS`, and `ZENITH_SMTP_FROM`, scoped only to `app`. The documented relay uses port 587 and STARTTLS.
-- A generated database password goes to PostgreSQL and the app's database URL. A separate generated stable signing key goes only to the app.
-- Private storage declarations cover PostgreSQL and uploaded media.
-- The only public endpoint is app port 8080. Zenith terminates HTTPS. Public image dependencies and one root `build: .` app follow the [container guide](https://docs.zenith.hosting/content/containerise.md).
-
-Validation actually performed: Docker Compose parses the manifest; both schemas supplied by the official skill pass; the npm CLI's published schema and applicable semantic checks pass via `deploy/check_manifest.mjs`.
-
-`NO_COLOR=1 zenith check --upload-size` was also run with npm CLI **0.1.4** and **fails** its stricter preview policy on the published `env` and `storage` blocks. The supplied skill schemas describe broader preview behavior than that npm release. This does not prove the published manifest invalid, nor does schema success prove server acceptance. No preview variant was created that drops required SMTP/secrets. Verify the target server/CLI compatibility before an authorized preview.
-
-Next operator actions:
-
-1. Let the CI container/PostgreSQL/recovery checks pass, or run their commands with a running Docker daemon.
-2. Confirm Zenith volume ownership supports UID/GID 10001, identify the exact ingress CIDR for `TRUSTED_PROXY_CIDR`, and arrange independent backups.
-3. Confirm catalogue licensing before publication. No license file exists; the manifest accurately says `UNLICENSED` and does not grant a new license.
-4. With explicit permission, commit/push the reviewed files to the public repository and complete Zenith account/GitHub/Developer Agreement prerequisites. Then follow the [official publishing workflow](https://docs.zenith.hosting/content/publish.md), which builds the pinned GitHub source without requiring a separately published app image.
-5. Once provisioned, run every acceptance check below, especially actual SMTP delivery and restore. No credentials need to be copied into source.
-
-No authentication, preview upload, image publication, commit, push, or deployment was performed. Manifest server admission and the real instance's SMTP, ingress, volume permissions, and backup facilities remain unverified.
-
-## Backups and recovery
-
-`deploy/backup.py` requires Python 3.12+, Docker Compose, and operator access. It briefly stops the single app writer, dumps PostgreSQL, archives all media, includes SHA-256 checksums, then restarts the backend if it was running. Backups use private permissions. Retention defaults to seven days and deletes only matching older backup files after a successful new archive.
-
-```sh
-backend/.venv/bin/python deploy/backup.py --project zoomz backup /mnt/independent-backups/zoomz --keep-days 7
-```
-
-Schedule this daily through an available operator/hosting scheduler. Copy completed archives to encrypted off-host storage with its own seven-day-or-longer retention. A second directory or volume on the same failed host is not disaster recovery. Restrict access: the archive contains user content and account data. Keep configuration secrets separately in a secure store.
-
-**Before accepting real user data, confirm the scheduler, independent destination, copy-failure alert, and restore drill.** These hosting-specific facilities are not configured here. If Zenith gives no Compose/operator access, arrange its supported database-and-media backup/export mechanism instead. Database-only snapshots are insufficient.
-
-Restore only a trusted archive into an **empty recovery project with fresh volumes**, using a separately prepared recovery environment and a different `WEB_PORT`. The utility refuses populated database/media targets and does not erase existing volumes.
-
-```sh
-# Build the recovery images first.
-docker compose --env-file .env.recovery -p zoomz-recovery -f compose.production.yml build
-backend/.venv/bin/python deploy/backup.py --env-file .env.recovery --project zoomz-recovery restore /path/to/zoomz-backup-TIMESTAMP-ID.tar --confirm-empty-target
-docker compose --env-file .env.recovery -p zoomz-recovery -f compose.production.yml up -d --wait
-```
-
-Run the acceptance checks before switching traffic. Keep the original project intact until recovery is verified. An unsuccessful restore may leave a partial recovery target; inspect it and use new empty recovery volumes for another attempt.
-
-## Deployment acceptance checklist
-
-- [ ] Frontend and a directly loaded nested URL work over the correct public HTTPS origin.
-- [ ] `/api/health` succeeds; production API docs are disabled.
-- [ ] A new user receives and completes a Zenith SMTP magic-link sign-in.
-- [ ] An existing user sends an invitation; its recipient joins with the intended role.
-- [ ] A space can be edited and changes survive reload.
-- [ ] Upload an image and confirm the original/preview remain after backend restart.
-- [ ] Two browser sessions see edits and cursors through the production WebSocket proxy.
-- [ ] Viewers/strangers cannot edit or access private files; production cookies are Secure/HttpOnly.
-- [ ] Database and uploads survive container recreation with the same volumes.
-- [ ] A scheduled paired backup reaches independent storage and is restored successfully.
-- [ ] Ingress/application logs contain no sign-in tokens, SMTP credentials, or cookie values.
+- Edits larger than the live socket's 64 KB message cap (a very long note, a big paste) are sent over HTTP instead; everyone still receives them live.
 
 ## Current verification and limitations
 
