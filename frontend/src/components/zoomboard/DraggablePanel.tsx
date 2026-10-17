@@ -65,7 +65,11 @@ export function DraggablePanel({ id, label, defaultPos, className, children }: P
     if (e.button !== 0) return
     const r = ref.current!.getBoundingClientRect()
     drag.current = { px: e.clientX, py: e.clientY, left: r.left, top: r.top, at: { left: r.left, top: r.top } }
-    e.currentTarget.setPointerCapture(e.pointerId)
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      /* the pointer already went away */
+    }
     setDragging(true)
     setLive({ left: r.left, top: r.top })
   }
