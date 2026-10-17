@@ -85,6 +85,15 @@ export const TILT = {
   press: { y: 3 },
 } as const
 
+/**
+ * Perspective for a card's tilt, in its own units. Scaling it with the card keeps the tilt
+ * looking the same at any size (a 220×290 card at 900px) — and, crucially, keeps a card that
+ * was resized huge from swinging its corners past the eye point, which can't be projected.
+ */
+export function perspectiveFor(w: number, h: number): number {
+  return Math.max(900, Math.max(w, h) * 3.1)
+}
+
 /** Board stack fan-out per layer, rest vs. hover (design system: 4px/12px spread). */
 export const STACK = {
   rest: [

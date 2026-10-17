@@ -31,7 +31,7 @@ import type { Tactile } from "@/components/zoomboard/TactileSlab"
 import { ZoomControls } from "@/components/zoomboard/ZoomControls"
 import { CameraEngine } from "@/lib/cameraEngine"
 import { copyNodes, lastClip, parseClip, pasteOps } from "@/lib/clipboard"
-import { MOTION, SPACE, ZOOM, floorFor } from "@/lib/constants"
+import { MOTION, SPACE, ZOOM, floorFor, perspectiveFor } from "@/lib/constants"
 import { api } from "@/lib/http"
 import { pathTo, titleOf } from "@/lib/scene"
 import { SCENERY, themeById, type SceneryId } from "@/lib/scenery"
@@ -1232,6 +1232,10 @@ function Item({ placed, space, tactile, selected, multi, reduced, dragging, drop
     zIndex: dragging ? 50_000 : order,
     ["--zh" as string]: n.z ?? 0,
     ["--s" as string]: scale,
+    // The hover/drag tilt's perspective, in the card's own units, scaled with the card: a fixed
+    // 900px is gentle on a 220px card but lets a resized 6000px card swing past the eye point,
+    // which the browser can't project (garbled card, screen-sized black layer).
+    perspective: perspectiveFor(n.w, n.h),
     pointerEvents: opacity < 0.2 || dragging || hidden ? "none" : undefined,
     willChange: dragging ? "transform" : undefined,
   }

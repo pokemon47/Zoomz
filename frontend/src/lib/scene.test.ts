@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { CameraEngine, lerpCam } from "./cameraEngine"
-import { SPACE, lodFor } from "./constants"
+import { SPACE, TILT, lodFor, perspectiveFor } from "./constants"
 import { indexScene, pathTo, previewImages } from "./scene"
 import { Space, covers, layerOf, layout, lift, localFromScreen, sortByLayer } from "./space"
 import { SceneStore } from "./store"
@@ -274,5 +274,34 @@ describe("layers", () => {
   it("new things land on top", () => {
     const st = make()
     expect(topRank(st.space, "root")).toBeGreaterThan(Math.max(...st.space.index.children.get("root")!.map(layerOf)))
+  })
+})
+
+describe("card tilt", () => {
+  // Nearest a corner of a w×h card gets to the eye under a tilt (rotate about the centre,
+  // lifted by `y` px), as a fraction of the perspective distance. ≥ 1 means behind the eye.
+  const reach = (w: number, h: number, rx: number, ry: number, lift: number) => {
+    const p = perspectiveFor(w, h)
+    const a = (rx * Math.PI) / 180, b = (ry * Math.PI) / 180
+    let worst = 0
+    for (const [x, y] of [[-w / 2, -h / 2], [w / 2, -h / 2], [-w / 2, h / 2], [w / 2, h / 2]]) {
+      // rotateX then rotateY; z toward the viewer is positive
+      const z1 = -y * Math.sin(a)
+      const z = x * Math.sin(b) + z1 * Math.cos(b)
+      worst = Math.max(worst, (z + Math.abs(lift)) / p)
+    }
+    return worst
+  }
+
+  it("never brings a corner anywhere near the eye, however big the card", () => {
+    for (const [w, h] of [[220, 290], [1200, 900], [6000, 7900], [20000, 20000]]) {
+      expect(reach(w, h, TILT.hover.rotateX, TILT.hover.rotateY, TILT.hover.y)).toBeLessThan(0.15)
+      expect(reach(w, h, TILT.drag.rotateX, 0, TILT.drag.y)).toBeLessThan(0.15)
+    }
+  })
+
+  it("leaves normal-sized cards (prints and notes) exactly as before", () => {
+    expect(perspectiveFor(200, 290)).toBe(900)
+    expect(perspectiveFor(220, 190)).toBe(900)
   })
 })
