@@ -1,10 +1,12 @@
 # MCP v1 progress
 
-Updated 2026-10-18. **73% weighted, verified estimate.** This is not a time estimate. Only completed items earn credit; in-progress and pending items earn zero. Each phase's substantive items have equal weight within that phase. Weighted total: 73.00%.
+Updated 2026-10-18. **73% weighted verified estimate**, not remaining time or production readiness. Equal substantive item weights within each phase. Only verified completed items earn credit; in-progress/pending earn zero. Documentation cleanup earns no implementation credit.
 
 `Zoomz MCP v1: [███████████████░░░░░] 73%`
 
-| Phase | Weight | Completed items | Earned |
+Current phase: Phase 5 frontend integration and Phase 6 acceptance verification.
+
+| Phase | Weight | Verified items | Earned |
 | --- | ---: | ---: | ---: |
 | 0. Repository and feasibility audit | 5% | 4/4 | 5.00% |
 | 1. MCP foundation and authentication | 20% | 5/6 | 16.67% |
@@ -14,33 +16,38 @@ Updated 2026-10-18. **73% weighted, verified estimate.** This is not a time esti
 | 5. Frontend integration | 10% | 1/5 | 2.00% |
 | 6. Hardening and acceptance verification | 10% | 4/6 | 6.67% |
 
-## Evidence and remaining work
+Unrounded sum **73.00%**; displayed phase values are rounded separately.
 
-Status key: **done** means executable/source evidence exists; **in progress** means implemented but incomplete verification; **pending** means absent or blocked.
+## Substantive requirements
 
-- **Phase 0.** Done: authoritative source/service review; official MCP/provider feasibility check; concise integration contracts in [README.md](README.md); baseline backend suite, 62 passed and one PostgreSQL-only skip.
-- **Phase 1.** Done: official SDK initialization/discovery/tool call; OAuth registration/PKCE/consent; token resource/expiry/rotation/revocation; scoped role enforcement; concurrent single-use consent/code/refresh consumption. In progress: externally reachable end-to-end client authorization. Evidence: `backend/tests/test_mcp.py`, including actual SDK ClientSession over ASGI, not Inspector or provider-account testing.
-- **Phase 2.** Done: nested creation and exact geometry; atomic validation/rollback; persisted retry keys and concurrent SQLite retry; source reference persistence/access validation. In progress: verified normal-editor rendering, live collaboration, and existing undo behavior for MCP changes. Existing mutation/event services are reused but that alone is not end-to-end proof.
-- **Phase 3.** Done: persisted tasks/checkpoints and continuation by another connection; pause via both backend interfaces with manual edits preserved; revision conflicts on resumption; destructive approval and recoverable snapshot restore. In-flight write/pause coordination now has SQLite concurrency tests through both control paths. In progress: running those tests on PostgreSQL; browser-visible draft progression. Evidence: targeted task, approval, retry, and recovery tests in `test_mcp.py`.
-- **Phase 4.** Done: stored inline media through existing validation; source/slide/page metadata and protected-source resolution, including actual source-image/PDF-page MCP results; structural bounds/overlaps/gaps. Source visual tests verify two-page PDF selection, raster aspect ratio, access restrictions, and actual SDK image-result transport. In progress: provider attachment transfer, with mocked transport/security tests but no real provider file; bulk-upload and explicit source association in the UI. Pending: actual rendered-board screenshots. Source page rendering is not a board screenshot.
-- **Phase 5.** Done: source indicator, citation dialog, and Escape closure in actual Chromium UI. In progress: connection/consent/permission management; destructive approval/elevation/recovery; complete draft control workflow; multi-file fallback. Consent and UI pause have been exercised, but the whole browser script has not passed, so no complete-workflow credit is awarded.
-- **Phase 6.** Done: focused security regressions, **35 MCP tests passed**; frontend suite, 31 passed, plus TypeScript/production build from the prior checkpoint; one independent OAuth/authorization review, with two medium findings corrected and regression-tested; full backend regression, SQLite migration round trip, and synthetic live HTTP/SDK contract exercise through Vite. Latest full backend result: **97 passed, 1 skipped**. The skip requires PostgreSQL. New regressions cover in-flight pause, consistent note-size limits, idempotent revocation, native loopback OAuth callbacks, and slow-drip attachment deadlines. The guarded CI container probe now checks MCP proxy/authentication and task/checkpoint/content/retry persistence across restart and backup restore; only its syntax was checked locally. Pending: actual production container/PostgreSQL verification; real Claude and ChatGPT Plus acceptance, including realistic lecture materials and visual quality. The HTTP test does not substitute for either acceptance requirement.
+- **Phase 0. Completed (4):** authoritative source review; reusable contracts/service review; official MCP/provider feasibility baseline; baseline verification. Dated research is not real-client acceptance.
+- **Phase 1. Completed (5):** official SDK protocol/tools; registration/PKCE/consent; resource-bound expiry/rotation/revocation; current-role/scope enforcement; concurrent one-use credential consumption. **In progress (1):** public HTTPS client authorization. Evidence: test_mcp.py, actual SDK over ASGI/local HTTP, not Inspector or provider accounts.
+- **Phase 2. Completed (4):** nested creation/exact geometry; atomic validation/rollback; persisted retries/concurrent SQLite retries; source-reference persistence/access validation. **In progress (1):** complete normal-editor rendering/collaboration/undo acceptance. Live browser operation delivery is observed but not the full workflow.
+- **Phase 3. Completed (5):** lifecycle/checkpoints/new-connection continuation; pause through both backend interfaces/manual edits preserved; fresh-revision conflicts and approval/snapshot recovery; SQLite in-flight pause/write coordination; browser-visible generating status/Pause. **Pending, environment-blocked (1):** equivalent PostgreSQL concurrency verification. Full UI resume is separately unverified in Phase 5.
+- **Phase 4. Completed (4):** inline media through existing validation; protected refs and real source-image/PDF-page results; structural bounds/overlaps/gaps; real sandboxed Chromium board screenshots, including nested/close-up. **In progress (2):** actual provider attachment transfer, mocked transport/security only; complete bulk-upload/source association. Native PowerPoint extraction is not implemented.
+- **Phase 5. Completed (1):** actual-browser source indicator/citation dialog/Escape. **In progress (4):** full connection/permission management; approval/elevation/recovery; complete draft pause/manual-edit/resume/finalization; multi-file fallback. Consent and Pause have partial browser evidence, not whole-workflow credit.
+- **Phase 6. Completed (4):** focused security regressions; frontend checks/build; narrow independent OAuth/permission review and fixes; full SQLite regression/migration round trip/synthetic HTTP SDK. **Pending (2):** PostgreSQL/production image/restart/recovery acceptance; real Claude/Plus and realistic lecture acceptance. Final security/high-reasoning review remains required, not already satisfied by the narrow review.
 
-## Quota policy
+## Latest recorded evidence
 
-**Current checkpoint supersedes older evidence descriptions below.** Actual sandboxed Chromium screenshots now pass root, nested, close-up, SDK image transport, scope, bounds, concurrency admission, and mid-render revocation checks. This completes Phase 4's screenshot item. Actual UI shows MCP changes live, draft status and successful Pause, completing Phase 3's browser-visible progression item; PostgreSQL races remain unverified. Full backend run: **103 passed, 1 skipped**, including six preview tests. Frontend: **31 passed**, lint exit 0 with existing warnings, and successful final TypeScript/Vite build. Source-dialog Escape was reproduced and fixed. Draft panel moved clear of Add controls; the browser workflow now stops at `get_by_role('menuitem', name='Note', exact=True)`, not at screenshot rendering. No complete UI acceptance pass is claimed.
+Preserved from implementation, not rerun during handoff:
 
-The latest 300-minute allowance is **85% used, 15% remaining**. **Implementation is stopped.** Disposable Vite and Uvicorn servers exited; no new task, test, or phase may start until user resumption. The following previous-checkpoint paragraphs are retained as evidence history, not current blocker status.
+- Full backend **103 passed, 1 skipped**, with `ZOOMZ_BROWSER_TESTS=1 MCP_RENDER_ORIGIN=http://127.0.0.1:5178 .venv/bin/python -m pytest -q --tb=short`. PostgreSQL-dependent coverage skipped.
+- Focused MCP **35 passed**; actual renderer suite **6 passed** with sandboxed Chromium and SDK image results.
+- Frontend **31 passed**; lint exit 0 with warnings; final TypeScript/Vite build passed.
+- SQLite Alembic upgrade/check/downgrade/re-upgrade/check and pip check passed.
+- Synthetic local mcp_http_smoke.py passed through HTTP/Vite; not provider/lecture acceptance.
+- Browser script verified login, consent, live changes, citations, generating status and Pause, then failed selecting Note by exact accessible name. Later steps remain unverified.
 
-The user resumed implementation and changed the stop point to **15% remaining** in the 300-minute window. This supersedes the previous 55% threshold and 50% reserve objective. Latest observed App Server reading: **55% used, 45% remaining**. Weekly usage is not used for this decision. Stop starting work at or below 15% remaining, finish only the atomic step, save this ledger and [HANDOFF.md](HANDOFF.md), clean up owned processes, and end the turn. These checkpoint reads cannot guarantee an exact reserve. Current work is awaiting dependency approval and unavailable test infrastructure, not the quota threshold. No test servers were started during this resume.
+## Blockers and next step
 
-## Blockers and qualifications
+1. Inspect Note menu accessibility and finish backend/tests/mcp_browser_smoke.py. [HANDOFF.md](HANDOFF.md) identifies relevant files and acceptance.
+2. Working Docker/PostgreSQL environment. Both locally tried Docker contexts timed out; no current image/PG pass.
+3. Authorized public HTTPS endpoint and real accounts. Claude/Plus writes and attachment transfer untested. Dated official research does not establish ordinary Plus write support.
+4. Complete realistic lecture acceptance, production sandbox/recovery and final security review.
 
-- Docker Desktop was retried once on the selected context and explicitly on `desktop-linux`; both timed out. No current container or PostgreSQL pass is claimed. No local `psql` or `initdb` was found.
-- Browser driver initialization fails with `Importing module "node:process" is not allowed in node_repl`; browser verification has not occurred.
-- Real-provider accounts and a public HTTPS test endpoint have not been used. OpenAI's cited help does not establish Plus custom-MCP write support. Ordinary ChatGPT, Work, API, and published-plugin support are distinct.
-- Rendered screenshots are not implemented. Structural inspection and links to the actual editor are available.
-- Adding the official Playwright Python dependency was blocked by the environment's approval reviewer before execution. User approval was requested; no package was installed and no workaround was attempted. This blocks the chosen actual-renderer screenshot implementation.
+Resolved historical blockers: approved Playwright/Chromium installation succeeded; isolated browser tests work; real board screenshots are implemented/tested. The separate in-app browser plugin failure no longer blocks these tests.
 
-Resolved since the previous checkpoint: the user explicitly approved installation; official Playwright 1.64.0, its required Python dependencies, and Chromium headless shell were installed. Actual renderer/browser tests now run in fresh sandboxed contexts. Screenshots are implemented and opt-in; production Linux sandbox support and Docker execution remain unverified. Remote fonts/media are intentionally blocked. Browser-plugin bootstrap remains broken, but is no longer a blocker for the approved isolated application tests. Do not treat the older installation/screenshot blockers above as current.
-- The progress ledger is local implementation evidence, not a production-readiness declaration. No production deployment, push, or production-data mutation occurred.
+## Quota checkpoint
+
+Normal previous-session stop point was 15% remaining in the **300-minute** window. The documentation-only exception began at **87% used / 13% remaining**, aiming to preserve 10% where possible. It authorizes no feature work. No owned app/browser processes remain and none were started for handoff. New sessions must establish their operator's quota policy. No exact reserve is guaranteed.

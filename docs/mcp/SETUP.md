@@ -1,5 +1,40 @@
 # Connect and verify Zoomz MCP
 
+## Prepare a new machine
+
+Use Python 3.12 and Node 24. These bootstrap commands match the repository dependencies, but the complete fresh-machine sequence has **not** been verified on another machine. Obtain the full MCP_start branch including its handoff documentation commit; see [HANDOFF.md](HANDOFF.md) for sharing status.
+
+```sh
+git clone <repository-url> zoomz
+cd zoomz
+git switch MCP_start
+python3.12 -m venv backend/.venv
+backend/.venv/bin/python -m pip install -r backend/requirements.lock -r backend/requirements-dev.txt
+npm --prefix frontend ci
+backend/.venv/bin/python -m playwright install --only-shell chromium
+```
+
+On Linux, Playwright may need OS packages. The Dockerfile uses `playwright install --with-deps --only-shell chromium`; this Linux installation has not been verified locally. No Firefox/WebKit or duplicate npm browser dependency is required. Browser binaries and OS libraries are needed in production only when runtime screenshots are enabled, but the current Dockerfile installs them explicitly. Python Playwright is a runtime dependency. Test scripts remain under backend/tests.
+
+For a disposable browser/HTTP test backend, run from the repository root:
+
+```sh
+cd backend
+zoomz_test_data=$(mktemp -d "${TMPDIR:-/tmp}/zoomz-mcp.XXXXXX")
+export APP_ENV=development
+export DATABASE_URL="sqlite:///$zoomz_test_data/test.db"
+export STORAGE_DIR="$zoomz_test_data/files"
+export PUBLIC_URL=http://127.0.0.1:5178
+export SMTP_HOST=
+export SENTRY_DSN=
+export MCP_RENDER_PREVIEWS=1
+export MCP_RENDER_ORIGIN=http://127.0.0.1:5178
+.venv/bin/alembic upgrade head
+.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8017 --no-access-log
+```
+
+This configuration follows the successfully used isolated environment. The exact combined bootstrap block is not itself a separately recorded test. Clear or review inherited application environment settings before using it. Never point smoke scripts at real account data. In a second terminal, build and serve frontend as shown below. The standard development server uses a different port; match PUBLIC_URL and MCP_RENDER_ORIGIN to the actual frontend origin if changing ports.
+
 ## Run locally
 
 Use the existing backend environment and frontend dependencies. Apply migrations before starting the backend:
@@ -49,7 +84,8 @@ For other MCP clients, configure remote Streamable HTTP with OAuth resource disc
 | Claude account | Not tested; public endpoint/account access required |
 | ChatGPT Plus account | Not tested; current official documentation does not establish required write support |
 | Published ChatGPT plugin | Not implemented or submitted |
-| Browser UI and visual lecture quality | Not verified |
+| Browser UI | Partial actual Chromium verification; complete smoke script currently fails selecting Note. See HANDOFF.md. |
+| Realistic lecture visual/educational quality | Not verified |
 | Rendered board screenshot | Tested actual root/nested/close-up SpaceCanvas captures and SDK image transport in local sandboxed Chromium |
 
 For each real provider test, record provider, plan, product surface, date, endpoint, available tool approvals, and result. Start with `get_capabilities`, `list_workspaces`, and `get_board`. Create one disposable board, one nested board, a cited note, and an image if actual bytes are available. Verify normal editing and collaboration in Zoomz. Revoke access and confirm the next call fails. A successful SDK test is not proof of provider compatibility.
@@ -111,6 +147,26 @@ To enable runtime screenshots, set `MCP_RENDER_PREVIEWS=1` and `MCP_RENDER_ORIGI
 Browsers receive read-only snapshot data by interception, not a public preview API or an application session. Direct visits to `/mcp-render` cannot retrieve private scenes. External fonts and media are blocked, so previews use local font fallbacks and graceful placeholders for external-only images. PostgreSQL/container/Zenith runtime execution remains unverified.
 
 ## Deploy with the existing application
+
+Optional PostgreSQL verification is **unverified locally**. The backend test fixture reads `TEST_DATABASE_URL` and otherwise forces disposable SQLite. Against an empty disposable PostgreSQL database only, run the following from backend after setting TEST_DATABASE_URL to its SQLAlchemy URL:
+
+```sh
+DATABASE_URL="$TEST_DATABASE_URL" .venv/bin/alembic upgrade head
+DATABASE_URL="$TEST_DATABASE_URL" .venv/bin/alembic check
+TEST_DATABASE_URL="$TEST_DATABASE_URL" .venv/bin/python -m pytest -q --tb=short
+```
+
+Never use production: tests reset database content. Do not assume setting DATABASE_URL alone makes tests exercise PostgreSQL.
+
+Container commands are **unverified for this MCP revision**. Prepare an isolated operator configuration and storage targets using the root [README.md](../../README.md), not real production volumes, then run:
+
+```sh
+docker compose --env-file .env.production -p zoomz-mcp-test -f compose.production.yml config -q
+docker compose --env-file .env.production -p zoomz-mcp-test -f compose.production.yml build
+docker compose --env-file .env.production -p zoomz-mcp-test -f compose.production.yml up -d --wait
+```
+
+Run these from the repository root. `.env.production.example` is a template, not a credential-bearing deployable configuration. Do not copy live production secrets into test fixtures. Do not run destructive volume cleanup. The guarded CI container probe is for disposable projects only; use the existing CI invocation rather than inventing a production test command.
 
 Apply the existing README's production procedure. There is no separate MCP container or port. The image's nginx template proxies `/mcp` without buffering and forwards OAuth metadata. Existing WebSocket routes remain unchanged. Keep one backend worker because collaboration and rate limiting are process-local.
 

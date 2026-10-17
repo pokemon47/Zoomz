@@ -1,5 +1,7 @@
 # MCP implementation reference
 
+Paths beginning `app/` in this document are relative to `backend/`. Frontend paths are relative to `frontend/src/`. [SPECIFICATION.md](SPECIFICATION.md) records required scope; this file records implemented behavior.
+
 ## Backend integration
 
 `app/mcp_server.py` mounts the official Python SDK's stateless Streamable HTTP transport at `/mcp` inside the existing FastAPI lifespan. `app/mcp_access.py` owns OAuth and connection grants. `app/mcp_ui.py` exposes cookie-authenticated management, approvals, draft controls, sources, and recovery. `app/mcp_service.py` implements tools over existing `Node`, `Space`, uploads, and operations.
@@ -99,7 +101,19 @@ Interrupted tasks can also pause. Completed and cancelled tasks are terminal. Di
 
 Pause serializes with writes against the space and prevents subsequent AI mutations under that user's paused board, including attempts to omit `task_id`. Manual editor changes remain allowed. Resume, checkpoint, and finalization require the latest revision; pausing and cancellation do not require a fresh revision. Resume does not resume provider inference. A later conversation can list tasks, inspect the checkpoint and board, and continue using current revisions and available sources.
 
-Checkpoints support `summary`, `completed_phases`, `outstanding_work`, `missing_sources`, and `available_sources`. They are bounded to 32,000 serialized characters. Task-associated mutations cannot escape the task board subtree. Concurrent PostgreSQL behavior and browser-visible progression still need acceptance verification.
+Checkpoints support `summary`, `completed_phases`, `outstanding_work`, `missing_sources`, and `available_sources`. They are bounded to 32,000 serialized characters. Task-associated mutations cannot escape the task board subtree. Browser-visible progression and Pause have partial real-browser evidence. Full UI resume and PostgreSQL concurrency still need acceptance verification.
+
+## Implementation entry points and persistence
+
+`mcp_access.atomic()` uses SQLite immediate transactions or PostgreSQL locks. `validate_grants()`, `connection_for()`, `within()`, and `authorize_board()` enforce connection scope and current roles. `mcp_service.prepare_ops()` validates the batch; `apply_batch()` coordinates its transaction; `task_action()` manages lifecycle. `mcp_preview.preview_scene()` builds a scoped snapshot, `capture()` runs the actual renderer, and `get_board_preview()` rechecks authority before returning.
+
+`mcp_models.py` defines `McpClient` (mcp_clients), `McpPending` (mcp_pending), `McpConnection` (mcp_connections), `McpCredential` (mcp_credentials), `GenerationTask` (mcp_tasks), `McpBatch` (mcp_batches), `McpApproval` (mcp_approvals), and `McpAudit` (mcp_audit). They connect existing user/workspace/scene identities with grants, tasks, retries, and recovery; they do not replace Node/Space. The batch key is unique per connection. Migration `a90b4a770001` follows `7de3a94355d8`; backend/alembic/env.py registers the models. Snapshot assets and source references participate in media retention. Database plus media backups remain required.
+
+OAuth routes under `/api/mcp/oauth` implement registration, authorize, token, and revoke. `/api/mcp/consent/{identifier}` uses normal session authentication. Connection management is `/api/mcp/connections`; UI routes under `/api/mcp` also expose tasks, approvals, protected sources, and owner-only snapshots/restoration. Cookie-authenticated mutations retain the existing X-Zoomz CSRF boundary. Source resolution returns a protected existing file URL, optionally with a PDF page fragment, rather than a public original.
+
+`mcp_schema.py` defines CanvasBatch, SourceReference, and Checkpoint boundary contracts. `mcp_download.py` supplies constrained optional provider fetching. `main.py` owns lifecycle, body limits and cleanup. `files.store_upload(..., commit=False)` reuses normal media validation/staging. `media.py` shares the PDFium lock with source page rendering. `live.py` dispatches sends to each socket's owning loop; do not restore the old global-loop assumption that caused cross-TestClient hangs.
+
+`McpRenderPage.tsx` uses a viewer SceneStore without connecting WebSockets. Its snapshot is supplied by browser interception, not a publicly accessible snapshot endpoint. SpaceCanvas's optional initialView uses the existing camera to frame board-local bounds. Playwright is a pinned runtime dependency. Docker installs Chromium headless shell/system libraries at `/opt/zoomz-browsers`, keeping user 10001. Enable with MCP_RENDER_PREVIEWS; MCP_RENDER_ORIGIN selects the actual renderer origin. Production defaults in operator Compose use same-image loopback nginx. The Zenith manifest itself was not changed for these optional settings; verify host injection and sandbox support before enabling.
 
 ## Sources and media
 

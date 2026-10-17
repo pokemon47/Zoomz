@@ -1,113 +1,148 @@
-# MCP continuation checkpoint
+# Zoomz MCP v1 developer handoff
 
-Updated 2026-10-18. **STOPPED at 15% remaining; wait for user resumption.** Branch `MCP_start`. Implementation is **73% weighted verified**, currently browser acceptance/hardening. The current checkpoint below supersedes the older detailed checkpoint retained later in this file. Read PROGRESS.md, REFERENCE.md, and SETUP.md; do not repeat repository/provider discovery.
+Updated 2026-10-18. This replaces earlier contradictory checkpoint history. No features, services, browser sessions, dependency installations, or test suites ran during this documentation-only handoff.
 
-## Current resume checkpoint
+## A. Executive summary
 
-- Last actual 300-minute allowance: **85% used, 15% remaining**. Stop policy is 15% remaining, not 15% used and not weekly usage. No further implementation or optional checks after this save.
-- User explicitly approved official Playwright and Chromium. Installed `playwright==1.64.0`, `pyee==14.0.0`, `greenlet==3.5.6`, and only Chromium headless shell plus its official FFmpeg helper. No duplicate npm browser package or pytest plugin. Runtime requirements/lock updated because production screenshots use Playwright.
-- New `backend/app/mcp_preview.py` and `frontend/src/pages/McpRenderPage.tsx` implement actual SpaceCanvas screenshots. `get_board_preview` is an async MCP tool, offloading capture to a thread so it does not block the MCP event loop. Isolated sandbox-enabled browsers receive only an authorized read-only subtree and authorized stored media by interception. No user credentials/session reach Chromium. No public snapshot API exists. External requests and WebSockets are blocked; remote fonts fall back locally.
-- Limits: one render, 2,000 nodes, 64 levels, 8 MiB scene, bounded viewport, 25-second render deadline plus cleanup. Permissions are rechecked before returning, discarding images after revocation. Geometry and `content.frame` use the existing scene/camera. Optional board-local bounds select close-up views. Capability discovery reflects opt-in enablement.
-- Verified with actual downloaded sandboxed Chromium: root/topic/close-up images, real nested composition, uploaded image, and real MCP SDK image-result delivery. Images were visually inspected. Artifacts: `/private/var/folders/xq/3_zry3k13tg2nh8hshlcbn_00000gn/T/pytest-of-doodleaks/pytest-19/test_real_renderer_nested_and_0/{root,topic,close}.jpg`. Later test runs produce equivalent fixtures under newer pytest directories.
-- Latest full backend: **103 passed, 1 skipped** in 8.73s, command `ZOOMZ_BROWSER_TESTS=1 MCP_RENDER_ORIGIN=http://127.0.0.1:5178 .venv/bin/python -m pytest -q --tb=short`. Preview suite: **6 passed** in 3.76s. PostgreSQL remains skipped. Frontend **31 passed**, lint exit 0 with known warnings; final `npm run build` passed after the source Escape and draft-position changes. `pip check` and `git diff --check` passed before checkpoint docs.
-- Browser script `backend/tests/mcp_browser_smoke.py` is **not fully passing**. Actual UI verified sign-in, endpoint, selected-workspace consent, real SDK writes arriving through WebSocket, source dialog, Escape closure, draft generating status, and Pause. It currently stops at `get_by_role('menuitem', name='Note', exact=True)` after opening Add. Likely accessible name includes shortcut `N`; this is an inference, not yet inspected. Do not skip/bypass the UI or claim later steps passed.
-- Confirmed fixes: Vite proxy now matches only MCP endpoint paths, not `/mcp-render` or `/mcp-connect`; preview API proxy enables WebSockets. SourceIndicator explicitly closes on Escape while protecting canvas shortcuts. Draft panel moved from top 76 to 144 so it does not cover Add/scenery controls. Type/build passed; full browser acceptance remains incomplete.
-- Dockerfile installs Chromium/system libraries at `/opt/zoomz-browsers`, preserving non-root user 10001. Operator Compose and env example add opt-in `MCP_RENDER_PREVIEWS=0` and same-image `MCP_RENDER_ORIGIN=http://127.0.0.1:8080`. Never use `--no-sandbox`, privileged containers, or capability escalation to force a launch. Docker/Linux sandbox/Zenith execution remains unverified. No Zenith manifest change or deployment. Official Zenith container page fetch failed; local skill retained without an unauthorized update.
-- CI adds actual-renderer tests against built frontend in addition to existing checks. CI changes have not run remotely. `deploy/container_check.py` retains the prior guarded MCP restart/recovery probe.
-- New/changed this resume: Dockerfile, `.github/workflows/checks.yml`, production env/Compose, runtime requirements, `mcp_preview.py`, `mcp_server.py`, `mcp_service.py`, `test_mcp_preview.py`, `mcp_browser_smoke.py`, App/McpRenderPage/SpaceCanvas, SourceIndicator, BoardPage, Vite config, docs/mcp. Earlier uncommitted MCP files remain; do not discard them. Nothing committed, pushed, published, deployed, or changed in production.
-- Processes cleaned up: Vite exec session 11281 exited 130 after Ctrl-C; disposable Uvicorn PID 4730/session 93184 completed shutdown and exited 0. All browser/test processes exited. Disposable SQLite/media under `/private/tmp/zoomz-mcp-browser.*` retained; no real data touched. No automatic restart.
+Zoomz MCP lets users' existing AI assistants build real editable nested moodboards. The assistant supplies reasoning and composition. Zoomz supplies scoped tools, normal scene operations, persistence, media, rendering, and durable drafts. No paid LLM inference, separate AI backend, gateway, or parallel canvas model was added.
 
-### Exact next step after user resumption
+**73% weighted verified completion.** Backend functionality and real Chromium screenshots are substantially implemented. Full editor browser acceptance, PostgreSQL/container execution, public OAuth, and real Claude/ChatGPT Plus acceptance remain incomplete. This is not a production-readiness declaration. [SPECIFICATION.md](SPECIFICATION.md) preserves the approved scope; [PROGRESS.md](PROGRESS.md) scores actual evidence.
 
-Read the current 300-minute allowance. Start the built frontend on 5178 and a **disposable** backend on 8017 using SETUP.md. Do not rerun source discovery or already passing screenshot tests just to resume. Inspect the Add menu's accessible name in the fresh test browser, correct the exact-name selector if warranted, and continue `tests/mcp_browser_smoke.py --url http://127.0.0.1:5178`. Its later manual-edit/undo/resume/bulk-upload/grant/approval/revocation steps remain unverified. Then test remaining UI elevation/recovery and nested navigation, run relevant checks at a milestone, and update weighted credit only for verified items. Docker/PostgreSQL and real Claude/ChatGPT acceptance still require working external infrastructure/access.
+## B. Repository state and transfer
 
-## Previous checkpoint details (historical)
+- Branch `MCP_start`.
+- Code baseline HEAD `5a1c7222f35fe9de766991b0bae026d3b5f4e891`.
+- Subject `almost doen can continue based on docs/progress and docs/handoff`.
+- Working tree was **clean** at handoff start. Older claims that MCP implementation files were uncommitted are obsolete.
+- Local `origin/MCP_start` matches that SHA. Live `git ls-remote` failed in this environment, so the remote's current contents are not independently confirmed.
+- This handoff modifies only five existing documentation files and adds SPECIFICATION.md. No newly untracked implementation, migration, dependency, or generated artifacts were present.
 
-## Quota guard
+All of these required source artifacts are already tracked in the baseline:
 
-The user superseded the previous 55%-remaining threshold and 50% reserve with a **15%-remaining stop point**. Latest App Server reading: **55% used, 45% remaining** in the window with `windowDurationMins == 300`. Do not use the weekly window. At 15% remaining or less, stop new work, finish the atomic edit, update this handoff/progress, stop owned services, and end the turn. Never promise an exact reserve. If the interface fails, ask the user for `/status` rather than continuing without visibility.
+```text
+backend/app/mcp_access.py          backend/app/mcp_download.py
+backend/app/mcp_models.py          backend/app/mcp_preview.py
+backend/app/mcp_schema.py          backend/app/mcp_server.py
+backend/app/mcp_service.py         backend/app/mcp_ui.py
+backend/alembic/versions/a90b4a770001_mcp.py
+backend/tests/test_mcp.py          backend/tests/test_mcp_preview.py
+backend/tests/mcp_http_smoke.py    backend/tests/mcp_browser_smoke.py
+frontend/src/pages/AiPage.tsx      frontend/src/pages/McpRenderPage.tsx
+frontend/src/components/app/SourceIndicator.tsx
+```
 
-The installed `codex app-server --listen stdio://` accepts JSON-lines `initialize`, `initialized`, then `account/rateLimits/read`. A short subprocess needs permission outside the restricted sandbox. Print only the selected window, not the whole account response. Terminate the subprocess after the response. No background quota service is installed.
+Transfer the **whole branch**, including its existing integration changes to backend main/ops/files/media/live, Alembic registration, frontend routing/types/BoardPage/SpaceCanvas/TopBar, runtime requirements/lockfiles, Dockerfile, Compose/env example, nginx/Vite routing, CI, container probe, and docs. Do not transfer private environment files, databases, node_modules, virtual environments, browser caches, ignored audit files, or temporary screenshots as source artifacts. Locally installed skills are not application dependencies.
 
-## Completed and verified
+After reviewing the documentation diff, the user may run the following. **The handoff agent has not committed or pushed.**
 
-- Official SDK remote Streamable HTTP inside FastAPI; real SDK protocol initialization, tools, bearer verification, metadata and OAuth PKCE/consent/rotation/revocation.
-- User-bound workspace/board/all grants, current roles, exact destructive approvals, task/time/persistent elevation, recoverable owner-only scene snapshots.
-- Existing-node batches, exact geometry and hierarchy, atomic caller transactions, stable retry IDs, conflicts, existing live operation delivery.
-- Tasks/checkpoints, pause from both backend interfaces, manual editing while paused, fresh-revision resume, new-connection continuation and finalization.
-- Existing upload pipeline, protected source references, SSRF-constrained optional attachment import, paginated structural inspection and long-note reading.
-- Actual source-image/PDF-page MCP results through `get_source_visual`. Images use existing raster derivatives; PDFs use a shared PDFium lock also used by upload previews. Results include real JPEG content and bounded source metadata, not a replacement board renderer. Selected-page, raster proportions, scope denial, and official SDK image transport tests pass.
-- UI connection/consent/grants, approvals, draft control, snapshot recovery, and source indicators compile; frontend suite passes. Browser integration is not verified.
+```sh
+git switch MCP_start
+git diff --check
+git add -- docs/mcp/HANDOFF.md docs/mcp/PROGRESS.md docs/mcp/SPECIFICATION.md docs/mcp/SETUP.md docs/mcp/REFERENCE.md docs/mcp/README.md
+git diff --cached --stat
+git diff --cached --check
+git commit -m "Document Zoomz MCP v1 engineering handoff"
+git push origin MCP_start
+```
 
-Recent regressions reproduce and fix selected-board inspection wrongly requiring access to its parent. The authorized board's out-of-scope parent ID is hidden. Long manual notes are paged without truncating stored content, and geometry-only edits leave text intact.
+If the push is rejected, inspect the remote changes. Do not force-push. Confirm the shared branch before telling the recipient to clone it. The documentation commit will have a different SHA from the baseline.
 
-Selected-board connections now discover only the workspaces containing their currently accessible authorized boards. A separate regression confirms an approved destructive request cannot be reused through another connection, even for the same user and identical parameters.
+Alternatively, **after committing the documents**, run `git bundle create zoomz-mcp-handoff.bundle MCP_start`. The recipient runs `git clone -b MCP_start /path/to/zoomz-mcp-handoff.bundle zoomz`. Bundles omit uncommitted/ignored files. Review repository history before sharing outside trusted collaborators.
 
-This resume added SQLite in-flight pause/write tests through browser API and MCP, consistent 100,000-character note-body validation for creation/updates, retry-safe OAuth revocation, production-compatible literal loopback callbacks for native OAuth clients, and an attachment-read deadline that rejects slow-drip responses. Whitespace/control characters in callbacks are rejected. New tests reproduced the revocation, callback, note-size and slow-drip defects before fixes.
+## C. Documents to read, in order
 
-## Test evidence
+1. Root [AGENTS.md](../../AGENTS.md).
+2. [SPECIFICATION.md](SPECIFICATION.md), approved requirements.
+3. [PROGRESS.md](PROGRESS.md), evidence and scoring.
+4. [SETUP.md](SETUP.md), commands and verification qualifications.
+5. [REFERENCE.md](REFERENCE.md), implemented tools, security, models, and limits.
+6. Relevant sections of [CODEBASE_OVERVIEW.md](../CODEBASE_OVERVIEW.md) for normal scene/store/camera behavior.
 
-- Latest full backend `.venv/bin/python -m pytest -q --tb=short`: **97 passed, 1 skipped**, 4.55s. This includes the latest source, scope, concurrency, OAuth and deadline changes. PostgreSQL-dependent coverage is skipped. The initial resumed run was 91 passed and one skipped; the intermediate hardening run was 96 passed and one skipped.
-- Latest focused `.venv/bin/python -m pytest tests/test_mcp.py -q --tb=short`: **35 passed**, 2.36s. One existing Starlette TestClient deprecation warning.
-- Frontend `npm test`: **31 passed**. `npm run build`: passed TypeScript and Vite. `npm run lint -- src`: exit 0 with pre-existing warnings and two new async-effect warnings; not zero-warning lint.
-- SQLite Alembic upgrade/check, downgrade to `7de3a94355d8`, re-upgrade/check: passed in disposable storage. `pip check`: passed. `git diff --check`: passed after the recent implementation edits.
-- `tests/mcp_http_smoke.py --url http://127.0.0.1:5178`: passed real HTTP SDK/OAuth and synthetic generation through Vite. It used a disposable backend, not a real provider. It predates the latest paginated-inspection change, which is covered by unit integration tests.
-- One narrow independent OAuth/permissions review found two medium defects: code replay could revoke before PKCE validation, and equal-length substantial replacement bypassed approval. Both were corrected and have passing regressions. No claim of comprehensive security certification.
-- `deploy/container_check.py` Python syntax passed. Its new MCP checks run under the existing `ZOOMZ_CONTAINER_TEST=1` guard and existing CI workflow, but actual container execution is blocked. The probe uses synthetic CI-only credentials, verifies discovery/401/SDK calls through nginx, and checks task/checkpoint/content plus identical retry after restart and paired recovery. Never run it against real data.
+[README.md](README.md) retains the concise plan and dated provider research. Read affected source/tests as needed, not another full repository audit.
 
-No browser, MCP Inspector, real Claude, real ChatGPT Plus, current image build, PostgreSQL concurrency, production SMTP, or backup restore acceptance has passed for this MCP implementation.
+## D. Implemented architecture
 
-## Architecture decisions
+React 19/TypeScript/Vite and the Python 3.12 FastAPI/SQLAlchemy backend remain authoritative. Node 24 is supported.
 
-Reuse `Node`, `Space.seq`, `ops.apply`, storage, and `live.hub`; no parallel canvas or inference backend. `ops.apply` and `store_upload` accept caller-owned transactions without changing ordinary editor commits. SQLite starts an immediate transaction; PostgreSQL locks connection/space rows. One worker remains required. SDK app/session manager is recreated per FastAPI lifespan for tests.
+- `backend/app/mcp_server.py`: official SDK 1.30.0 stateless Streamable HTTP at `/mcp`. `build_server()` and `install()` integrate with FastAPI lifespan; `Verifier.verify_token()` and `current_connection()` bind requests to grants.
+- `mcp_access.py`: OAuth discovery/registration/consent/PKCE/token rotation/revocation, role/scope checks, transaction locks. `mcp_ui.py`: cookie-authenticated connections, approvals, tasks, protected sources, recovery.
+- `mcp_service.py`: normal `Node`, `Space.seq`, `ops.apply(..., commit=False)`, uploads, and `live.hub`. One transaction covers scene changes, retry results, approval consumption, audits, and checkpoints. Normal editor callers keep default commit behavior.
+- `mcp_models.py` and migration `a90b4a770001`: eight OAuth/connection/task/retry/approval/audit tables. SQLite immediate transactions are tested; PostgreSQL row-lock behavior is not locally verified.
+- `AiPage.tsx`: consent, connections/grants, approvals/recovery and draft controls; `DraftStatus` polls every three seconds outside the canvas loop. `BoardPage.tsx` displays draft state; `SourceIndicator.tsx` displays citations. Existing WebSockets publish normal operations.
+- `mcp_preview.py`: isolated sandboxed Chromium renders an authorized snapshot through the actual `McpRenderPage.tsx`/`SpaceCanvas.tsx`. No user cookies/tokens reach Chromium. External requests and WebSockets are blocked; authorization is checked before and after capture. Async MCP capture offloads blocking browser work to a thread.
 
-Opaque credentials are hashed; OAuth resource is exactly `PUBLIC_URL/mcp`. Destructive grants are managed only through authenticated Zoomz UI. Approval binds full batch parameters and revision. Snapshot and reference assets are retained by housekeeping. Optional provider fetches require exact hosts, public-IP validation, pinned network destination, and normal TLS verification.
+Preserve flat nodes linked by parentId, board-local coordinates, rank as stacking, z as elevation, and stable content.frame. Do not replace the camera or invent preview geometry. Details and exact limits are in REFERENCE.md.
 
-The existing WebSocket hub now dispatches to each socket's owning event loop. This fixed a full-suite hang with multiple TestClient loops; the collaboration regression and full suite pass. Do not restore the old process-global loop assumption.
+## E. Verified functionality
 
-## Working tree
+These are recorded implementation-session results, **not reruns during handoff**:
 
-All listed changes are uncommitted task work; no commit, push, deployment, or production-data change occurred. Preserve the diff.
+| Check | Latest recorded outcome |
+| --- | --- |
+| Full backend with real-renderer fixtures | **103 passed, 1 skipped**, 8.73 seconds. PostgreSQL-only coverage skipped. |
+| Focused test_mcp.py | **35 passed**, before the separate preview suite was added. |
+| Real test_mcp_preview.py | **6 passed**, sandboxed Chromium, nested/close-up rendering, image transport, scope, bounds, admission and mid-render revocation. |
+| Frontend tests | **31 passed**. |
+| Frontend lint | Exit 0 with warnings, including two async-effect warnings. |
+| Frontend build | TypeScript and Vite passed after the latest dialog/draft-position fixes. |
+| SQLite migrations | Upgrade/check/downgrade to 7de3a94355d8/re-upgrade/check passed with disposable storage. |
+| Dependency integrity | pip check passed. |
+| Local HTTP smoke | Real SDK/OAuth and synthetic nested generation through Vite passed. Not real-provider or lecture acceptance. |
+| Narrow independent review | Two medium OAuth/destructive-edit findings corrected with regressions. Not a final comprehensive audit. |
 
-Modified tracked files:
+Tests cover token/resource/current-role/scope enforcement, atomic nested batches, exact geometry, retries/conflicts, source references, SQLite pause/write races, persisted continuation, approval/elevation, and recovery.
 
-- `.env.production.example`, `compose.production.yml`
-- `deploy/container_check.py`
-- `backend/alembic/env.py`, `backend/requirements.txt`, `backend/requirements.lock`
-- `backend/app/files.py`, `live.py`, `main.py`, `media.py`, `ops.py`
-- `frontend/nginx.conf.template`, `frontend/vite.config.ts`
-- `frontend/src/App.tsx`, `components/app/TopBar.tsx`, `components/space/SpaceCanvas.tsx`, `lib/types.ts`, `pages/BoardPage.tsx`
+Actual browser observations include normal sign-in, selected-workspace consent, live MCP writes over WebSockets, citation dialog and Escape, draft generation status, and successful Pause. Actual nested/close-up screenshots were visually inspected. Temporary image artifacts are disposable, not required for transfer.
 
-New files:
+## F. Known bugs and blockers
 
-- `backend/alembic/versions/a90b4a770001_mcp.py`
-- `backend/app/mcp_access.py`, `mcp_download.py`, `mcp_models.py`, `mcp_schema.py`, `mcp_server.py`, `mcp_service.py`, `mcp_ui.py`
-- `backend/tests/test_mcp.py`, `backend/tests/mcp_http_smoke.py`
-- `frontend/src/pages/AiPage.tsx`, `frontend/src/components/app/SourceIndicator.tsx`
-- `docs/mcp/README.md`, `REFERENCE.md`, `SETUP.md`, `PROGRESS.md`, `HANDOFF.md`
+- Current browser script stops at `get_by_role('menuitem', name='Note', exact=True).click()` after Add opens. A shortcut may make its accessible name include N. This is an **unconfirmed explanation**, not a proven app bug. Later script steps have not passed.
+- Already fixed: Vite wrongly proxying /mcp-render; disabled preview WebSockets; source-dialog Escape; draft panel covering Add. The current build includes these fixes.
+- The separate in-app browser plugin's node:process bootstrap error is **not a blocker** for the approved isolated Playwright tests, which now work.
+- Docker timed out on default and desktop-linux contexts; no local psql/initdb was available. No current container, PostgreSQL concurrency, production Chromium sandbox, restart/recovery, or hosted streaming pass is claimed. Another machine may resolve this.
+- No public HTTPS OAuth, real Claude, real ChatGPT Plus, or Inspector acceptance. Dated research does not establish ordinary Plus custom write support. Work, API, ordinary chat, and published plugins are distinct. No Zoomz plugin was published.
+- Provider attachment transfer has mocked transport/security evidence, not actual provider bytes. Presentation originals can be stored; native PowerPoint extraction is not implemented.
+- Full permission/elevation/recovery UI, bulk/source association, normal editor undo/redo/collaboration acceptance, realistic lecture curation, and final high-reasoning/security review remain incomplete.
 
-## Incomplete work and blockers
+## G. Remaining work, prioritised
 
-- Real browser verification of connection/consent UI, permissions, approvals, sources, bulk upload, live drafts, manual editor compatibility, and undo. Browser bootstrap failed with `Importing module "node:process" is not allowed in node_repl`.
-- Rendered-board screenshots are **not implemented**. Do not claim structural inspection meets the rendered-preview requirement. No misleading replacement renderer was added.
-- Source upload supports originals and existing previews; PowerPoint slide/figure extraction, uncertain-match review, and the full multi-document lecture acceptance are not implemented/verified as a complete workflow.
-- Real provider attachment transfer is unverified; guard and import tests use mocks. Plus write support is not established by the official help checked on 2026-10-18. No account or published plugin has been exercised.
-- Docker daemon timed out on `docker info` again. Local context lookup found `default` and `desktop-linux`; explicitly checking `desktop-linux` also timed out after eight seconds. No `psql` or `initdb` was available. Container/production proxy/PostgreSQL race tests and recovery acceptance remain undone. Do not repeat daemon checks without a user-reported environment change.
-- Cross-connection approval substitution and selected-board workspace discovery are now regression-tested. Further PostgreSQL races and production isolation remain unverified.
-- Create/update note-size limits and capability text are now aligned at 100,000 characters, with explicit refusal instead of silent truncation. Replacement detection remains a heuristic, not semantic proof against all destructive edits.
-- Official Playwright installation was rejected by the environment approval reviewer before execution because it mutates the project virtual environment with a new network dependency. A user approval question is pending. **Do not retry through another environment, package manager, or indirect command to bypass the denial.** No package was installed and no screenshot implementation files were added.
-- Finish acceptance coverage and review docs against final behavior. `SETUP.md` and `REFERENCE.md` document current behavior, including gaps.
+| Objective and relevant files | Next step and acceptance |
+| --- | --- |
+| Finish browser workflow: backend/tests/mcp_browser_smoke.py, frontend components/zoomboard/AddMenu.tsx, AiPage.tsx, BoardPage.tsx. | Inspect Note's actual accessible name. Correct test or app only as evidence warrants. Run the complete script on disposable data. Verify manual edits, undo/redo, pause/resume, grant changes, approvals, reload, finalization and revocation. Exercise elevation/recovery separately if needed. |
+| Normal editor integration: lib/store.ts, SpaceCanvas.tsx, ops.py, live.py, test_mcp.py. | Two authenticated sessions must observe MCP edits and retain normal editing and root/child/grandchild navigation. Establish actual undo/revision semantics; do not assume AI operations enter a user's local undo history. |
+| PostgreSQL/production: test_mcp.py, migration, Dockerfile, Compose, nginx, CI, deploy/container_check.py. | Apply migrations on disposable PostgreSQL; test locks/pause/retries/credential consumption. Build/start non-root image, verify streaming and sandboxed screenshots, restart persistence, paired backup restore. No sandbox weakening. |
+| Media/source workflow: files.py, mcp_download.py, mcp_service.py, SourceIndicator, browser smoke. | Multi-file supported originals, raster and PDF-page results must render and associate exact asset references with protected access. Test missing/uncertain sources. Test real attachment transfer only with a genuine client contract. |
+| Public OAuth and actual clients: mcp_access.py, mcp_server.py, nginx, SETUP.md. | With hosting/account authorization, verify HTTPS discovery/consent/refresh/revoke in Claude and Plus. Record plan/surface/date/approvals/writes/media separately. Document exact external blockers rather than claim compatibility. |
+| Realistic acceptance and final review: SPECIFICATION.md and affected boundaries. | Several lecture documents with text/diagrams/tables/equations must produce useful editable nested composition. Exercise both pause controls, manual edits/resume, new-conversation continuation, retries, approvals, finalization and persistence. Assess visual/educational quality. Complete security/high-reasoning review and relevant regressions. |
 
-## Owned processes
+Existing CI/probes are implementation, not evidence that remote CI or restore passed. Optional layout helpers do not justify an editor rewrite.
 
-Disposable development servers for the HTTP smoke test received **SIGTERM after matching their command identities**: Vite PID **1741** on 5178 and Uvicorn PID **2026** on 8017. No shutdown-exit poll was run after the checkpoint. If a port remains occupied on resumption, confirm command identity before reuse or cleanup. Do not stop unrelated application processes. The backend used isolated `/private/tmp/zoomz-mcp-http.*` database/storage, not user data. Test data is retained; no broad temp deletion is authorized.
+## H. Development environment
 
-Quota-query subprocesses terminate themselves. No active test suite or new agent task is intended. The one narrow review is finished.
+Use SETUP.md for fresh installation and exact commands. Fresh-machine bootstrap is not yet verified as one complete procedure. Playwright 1.64.0 and Chromium headless shell are runtime dependencies for screenshots as well as development test requirements. No duplicate npm browser package is needed.
 
-No local app servers or browser processes were started in this resume. The full and focused pytest runs exited. Both bounded Docker probes exited after timeout. There is no new cleanup task.
+Use disposable SQLite/media and synthetic accounts, never real account data. No owned app/browser processes remained at the implementation checkpoint; none were started for this handoff. Local temporary databases are not needed to resume.
 
-## Exact next step
+## I. Safety and security constraints
 
-Resolve the pending Playwright approval first, then read the current 300-minute allowance using the new 15%-remaining threshold. Do not rerun the already passing 97-test backend suite merely to resume. If approved, install the official Python dependency, pin the actual resolved versions, and reuse installed macOS Chrome for application screenshot tests. Continue with the actual-renderer snapshot design in README.md. Preserve sandboxing and non-root deployment; refuse screenshots if the runtime cannot maintain those restrictions. Do not substitute a simplified renderer or treat source-page images as board screenshots.
+- Enforce current roles and per-connection scope on every read/write/retry/file/preview, including after revocation.
+- Preserve exact OAuth callback/resource binding, PKCE, hashes, rotation, expiration, CSRF on cookie-management writes, generic errors, and secret-free logs.
+- Never trust AI claims of approval. Hosted consent binds user, connection, exact operation, revision, expiration and single use. Elevation is authenticated and revocable.
+- Preserve atomic retries/checkpoints/audits, revision conflicts, pause/write serialization and recoverable destructive edits.
+- Citations are not independently fact-checked. Stored document content cannot alter server authority.
+- Keep remote-fetch host opt-in, public-IP/DNS pinning, TLS validation, deadlines, quotas, private assets and cleanup.
+- Chromium stays isolated, sandboxed, bounded and credential-free. Never use no-sandbox, privileged mode or extra capabilities to force a pass.
+- Keep one backend worker because rooms/rate limits are process-local. Preserve HTTPS, PostgreSQL, persistent media, SMTP, backups, non-root execution and existing Zenith security.
+- Use one agent and targeted verification. Use poteto-mode if installed; report absence rather than installing automatically. No paid inference workaround or production changes without approval.
 
-If installation is declined, retain structural/source inspection and explicitly mark board screenshots incomplete. Browser-plugin repair, Docker responsiveness, and a public test instance/provider account remain external requirements. Once Docker is responsive, run existing PostgreSQL migrations/tests and the guarded CI restart/recovery probe. Do not rediscover completed source or provider research. No real-client acceptance may be claimed from SDK fixtures. Never deploy, publish, commit, or push without permission.
+## J. Suggested first task
+
+Inspect and resolve the Note menu interaction in the existing browser smoke script, then finish that script against disposable local data. This unlocks the largest current integration gap without repeating architecture discovery.
+
+## K. Copyable continuation prompt
+
+```text
+Continue Zoomz MCP v1 on MCP_start. Read AGENTS.md and docs/mcp/HANDOFF.md first, then SPECIFICATION.md, PROGRESS.md, and relevant SETUP.md commands. Inspect Git status and preserve unrelated work. Do not repeat completed repository/provider discovery. Use one agent and Medium reasoning, with poteto-mode if installed. First inspect the actual accessible name of Add > Note and resolve backend/tests/mcp_browser_smoke.py's current failure using disposable data. Complete the browser workflow, then follow HANDOFF.md's remaining priorities. Keep actual SpaceCanvas previews and all role/scope/approval/atomicity/revision boundaries. No paid inference. Update weighted progress only from verified evidence. Distinguish SDK, browser, Docker, Claude and ChatGPT Plus results. Do not commit, push, deploy or change production without permission. Ask the new operator for its quota policy; do not inherit the previous session's documentation-only exception.
+```
+
+The final handoff session observed **87% used / 13% remaining** in the actual 300-minute window before writing. The user authorized documentation only below the usual 15% stop point. That exception ends with this handoff. No exact reserve is guaranteed.

@@ -1,5 +1,7 @@
 # Zoomz MCP v1
 
+Start with [HANDOFF.md](HANDOFF.md) to resume development. [SPECIFICATION.md](SPECIFICATION.md) preserves the approved v1 scope; [PROGRESS.md](PROGRESS.md) records verified completion. The plan and dated provider research below are not a claim that all features or real-client acceptance are complete.
+
 The implementation is in development, not accepted for production use. [PROGRESS.md](PROGRESS.md) records verified milestones and gaps. [HANDOFF.md](HANDOFF.md) records the current continuation point.
 
 See [the tool and security reference](REFERENCE.md) for the implemented API, authorization boundaries, generation lifecycle, and limits. See [client setup and verification](SETUP.md) for commands and external-client acceptance checks.
