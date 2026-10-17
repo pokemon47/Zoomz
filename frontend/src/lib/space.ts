@@ -301,7 +301,20 @@ export class Space {
 
   /** Camera that frames a board's whole content in the viewport, in that board's frame. */
   fit(boardId: string, vp: Viewport, pad = SPACE.fitPad): Cam {
-    const cb = this.boundsOf(boardId)
+    return this.fitRect(boardId, this.boundsOf(boardId), vp, pad)
+  }
+
+  /**
+   * Frame what's actually on a board. Its content window (`fit`) is fixed when the board is
+   * made, so cards moved or added beyond it, or a board whose cards sit off to one side,
+   * would otherwise be framed around an empty middle.
+   */
+  fitContent(boardId: string, vp: Viewport, pad = SPACE.fitPad): Cam {
+    if (!this.index.children.get(boardId)?.length) return this.fit(boardId, vp, pad)
+    return this.fitRect(boardId, contentBounds(this.index, boardId, this.pos), vp, pad)
+  }
+
+  private fitRect(boardId: string, cb: Rect, vp: Viewport, pad: typeof SPACE.fitPad): Cam {
     const aw = Math.max(80, vp.w - pad.left - pad.right)
     const ah = Math.max(80, vp.h - pad.top - pad.bottom)
     const s = Math.min(aw / cb.w, ah / cb.h)

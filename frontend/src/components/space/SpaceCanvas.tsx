@@ -34,6 +34,7 @@ import { copyNodes, lastClip, parseClip, pasteOps } from "@/lib/clipboard"
 import { MOTION, SPACE, ZOOM, cardBoxFactor, floorFor, perspectiveFor } from "@/lib/constants"
 import { IMPORT_GRID, IMPORT_LIMITS, countFiles, fileCard, planFolder, readDrop, type BoardPlan, type FolderTree } from "@/lib/folderImport"
 import { api } from "@/lib/http"
+import { getCaptions, saveCaptions } from "@/lib/captions"
 import { pathTo, titleOf } from "@/lib/scene"
 import { SCENERY, themeById, type SceneryId } from "@/lib/scenery"
 import { layout, lift, localFromScreen, sortByLayer, type Cam, type Layout, type Placed, type Space, type Viewport } from "@/lib/space"
@@ -93,6 +94,13 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
   const reduced = useReducedMotion() ?? false
   const space = store.space
   const toast = useCallback((m: string) => onToast?.(m), [onToast])
+  const [captions, setCaptions] = useState(getCaptions)
+  const toggleCaptions = useCallback(() => {
+    setCaptions((on) => {
+      saveCaptions(!on)
+      return !on
+    })
+  }, [])
 
   const [vp, setVp] = useState<Viewport>({ w: window.innerWidth, h: window.innerHeight })
   const engineRef = useRef<CameraEngine | null>(null)
@@ -289,6 +297,14 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
   const flyToBoard = useCallback(
     (id: string) => {
       engine.flyTo(space.fit(id, engine.vp), performance.now())
+      kick()
+    },
+    [engine, kick, space],
+  )
+
+  const fitBoard = useCallback(
+    (id: string) => {
+      engine.flyTo(space.fitContent(id, engine.vp), performance.now())
       kick()
     },
     [engine, kick, space],
@@ -1029,9 +1045,10 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       if ((e.key === "Delete" || e.key === "Backspace") && selection.length) deleteSelection()
       else if (k === "n" && !store.readOnly) setCreating("note")
       else if (k === "b" && !store.readOnly) setCreating("board")
+      else if (k === "c") toggleCaptions()
       else if (e.key === "+" || e.key === "=") zoomCentre(ZOOM.step)
       else if (e.key === "-" || e.key === "_") zoomCentre(1 / ZOOM.step)
-      else if (e.key === "0") flyToBoard(lay.focus)
+      else if (e.key === "0") fitBoard(lay.focus)
       else if (t?.closest("button, nav")) return
       else if (e.key.startsWith("Arrow")) {
         const pan = { ArrowLeft: [ZOOM.keyPan, 0], ArrowRight: [-ZOOM.keyPan, 0], ArrowUp: [0, ZOOM.keyPan], ArrowDown: [0, -ZOOM.keyPan] }[e.key]
@@ -1044,7 +1061,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [copySelection, creating, deleteSelection, duplicate, editing, engine, flyToBoard, goUp, held, kick, lay.focus, menu, moveLayer, rectOf, selection, space, store, undo, vp, zoomCentre])
+  }, [copySelection, creating, deleteSelection, duplicate, editing, engine, fitBoard, flyToBoard, goUp, held, kick, lay.focus, menu, moveLayer, rectOf, selection, space, store, toggleCaptions, undo, vp, zoomCentre])
 
   const onItemKey = (e: ReactKeyboardEvent<HTMLDivElement>, n: SceneNode) => {
     if (e.target !== e.currentTarget) return
@@ -1070,7 +1087,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
   const peers = [...store.peers.values()]
 
   return (
-    <div className="absolute inset-0">
+    <div className={captions ? "absolute inset-0" : "absolute inset-0 zb-clean"}>
       <div
         ref={viewportRef}
         className={`zb-viewport zb-space${press?.kind === "pan" && press.moved ? " is-panning" : ""}`}
@@ -1197,7 +1214,7 @@ export function SpaceCanvas({ store, scenery, onScenery, follow = null, onStopFo
       <DraggablePanel id="zoom" label="the zoom controls" defaultPos={{ corner: "br", dx: 16, dy: 16 }}>
         <div className="zb-panel-stack">
           <LevelBadge depth={focusDepth} />
-          <ZoomControls readout={readout} onZoomIn={() => zoomCentre(ZOOM.step)} onZoomOut={() => zoomCentre(1 / ZOOM.step)} onFit={() => flyToBoard(lay.focus)} />
+          <ZoomControls readout={readout} onZoomIn={() => zoomCentre(ZOOM.step)} onZoomOut={() => zoomCentre(1 / ZOOM.step)} onFit={() => fitBoard(lay.focus)} captions={captions} onToggleCaptions={toggleCaptions} />
         </div>
       </DraggablePanel>
       <DraggablePanel id="minimap" label="the map" defaultPos={{ corner: "bl", dx: 16, dy: 16 }} className="zb-minimap-panel">

@@ -322,3 +322,20 @@ describe("card layout box", () => {
     expect(cardBoxFactor({ type: "board", w: 9000, h: 9000 })).toBe(1)
   })
 })
+
+describe("fit board", () => {
+  it("frames the cards themselves, not the board's original content window", () => {
+    const nodes = [
+      { id: "root", type: "board", parentId: null, x: 0, y: 0, w: 10, h: 10, content: { title: "Root", frame: { x: 0, y: 0, w: 1300, h: 1100 } } },
+      { id: "far", type: "note", parentId: "root", x: 5000, y: 3000, w: 200, h: 200, content: { title: "Far", body: "" } },
+    ]
+    const space = new Space(indexScene({ ...structuredClone(scene), nodes } as Scene), "root")
+    const vp = { w: 1000, h: 800 }
+    const cam = space.fitContent("root", vp)
+    // The note's centre lands at the centre of the fitted area.
+    const cx = (5100 * cam.s + cam.x), cy = (3100 * cam.s + cam.y)
+    const pad = SPACE.fitPad
+    expect(cx).toBeCloseTo(pad.left + (vp.w - pad.left - pad.right) / 2, 3)
+    expect(cy).toBeCloseTo(pad.top + (vp.h - pad.top - pad.bottom) / 2, 3)
+  })
+})

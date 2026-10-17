@@ -63,7 +63,8 @@ GitHub Actions runs SQLite tests, PostgreSQL migrations and tests, frontend chec
 | Step inside a board | Keep zooming toward it | Tab to it, then Enter |
 | Fly to anything | Double-click it, or ⌘K search | Enter |
 | Go up a level | Breadcrumbs or Back | Escape |
-| Frame the current board | **Fit board** | `0` |
+| Frame everything on the current board | **Fit board** | `0` |
+| Hide or show image and board captions | Captions button next to Fit board | `C` |
 | Jump somewhere on this board | Click or drag in the minimap | — |
 | Move the path bar, zoom controls or map | Drag their grip | Grip + arrow keys |
 
