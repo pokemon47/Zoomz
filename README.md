@@ -1,114 +1,168 @@
-# Zoomz — Zoomable Board proof of concept
+# Zoomz
 
-Scrolling replaced with zooming. A moodboard you walk into: one continuous 2.5D space where boards hold their contents on their faces. Keep zooming and you step inside them, as many levels deep as the board goes. Built to answer one question: *can a first-time user understand and enjoy moving through a visual project by zooming into nested boards?*
+A collaborative moodboard you can pan and zoom through. Nested boards show their actual contents. The existing React/TypeScript/Vite frontend, FastAPI backend, camera, artwork, and interaction design are preserved.
 
-- **Contract:** [`Zoomable_Board_POC_PRD.md`](Zoomable_Board_POC_PRD.md)
-- **Visual direction:** the Zoomboard design system in [`docs/design-system/`](docs/design-system/README.md) (handoff notes in [`docs/design-handoff.md`](docs/design-handoff.md))
+See [AGENTS.md](AGENTS.md) and the [codebase overview](docs/CODEBASE_OVERVIEW.md) for development guidance.
 
-```
-frontend/   React + TypeScript + Vite, Tailwind v4, shadcn/ui, Motion
-backend/    Python 3.9+ FastAPI serving a read-only JSON fixture + bundled SVG art
-docs/       Design system tokens, reference components, handoff notes
-```
+## Local development
 
-## Run it locally
+Use Python 3.12 and Node 24. Run these in separate terminals:
 
-You need **Python 3.9+** and **Node 20+**. Run each service in its own terminal.
-
-**1. API (port 8000)**
-
-```bash
+```sh
 cd backend
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/uvicorn app.main:app --port 8000
+python3.12 -m venv .venv
+.venv/bin/pip install -r requirements.lock -r requirements-dev.txt
+.venv/bin/uvicorn app.main:app --port 8000 --no-access-log
 ```
 
-Check it: `curl localhost:8000/api/health` should return `{"status":"ok"}`.
-
-**2. Frontend (port 5173)**
-
-```bash
+```sh
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
-Open http://localhost:5173. Vite proxies `/api` to `http://127.0.0.1:8000`. To proxy somewhere else, set `VITE_API_PROXY_TARGET`. If the API is down, the app shows a "Couldn't reach the board" panel with **Try again**.
+Open http://localhost:5173. Vite proxies HTTP and WebSocket API traffic to port 8000. The default database is SQLite at `backend/data/zoomz.db`; uploads live in `backend/data/files`.
 
-## Controls
+Without SMTP, development sign-in and invitation responses contain a `devLink`. Email bodies and tokens are not logged. This fallback is forbidden in production. Local mail delivery can use the same SMTP variables as production.
 
-There are no folders to open. Every board shows what's inside it on its face, even from far away, so you just keep moving toward what you want.
-
-| Action | Mouse / trackpad | Keyboard |
-| --- | --- | --- |
-| Move closer / further | Scroll wheel, two-finger scroll, or pinch | `+` / `-` |
-| Pan | Drag the floor (or the face of a board) | Arrow keys |
-| Step inside a board | Keep zooming toward it | Tab to it, then Enter (flies you in) |
-| Fly to a card or board | Double-click it | Enter |
-| Go up a level | Breadcrumbs, or Back | Escape |
-| Frame the current board | **Fit board** | `0` |
-| Move a card | Drag it. Drop it on another board and it moves *into* that board, taking on that level's size. | — |
-| Move a board | Drag its title strip (small boards: drag anywhere) | — |
-| Add images and files | Drag them in from your desktop onto any board, paste with ⌘V, or **Add → Images & files…** | ⌘V |
-| New note / board | **Add → Note / Board** (pasting plain text makes a note too) | `N` / `B` |
-| Delete / undo | — | Delete, then ⌘Z |
-| Change the world behind | **Scenery** picker (top right) | — |
-
-The breadcrumb, the level badge and the floor tint always show which board you're in, and they update on their own as you zoom.
-
-Added images and files live in memory only, as object URLs. Nothing is uploaded, and a reload restores the demo board.
+Signed-in spaces persist edits/uploads on the server. `/demo` permits memory-only changes and resets on reload. Wheel zooms; floor drag pans; breadcrumbs/Escape go up; `0` fits. Drag cards across visible boards. Double-click images to frame them; editable notes open their editor. Add/drop/paste, search (Cmd/Ctrl+K), resize, undo/redo, and minimap are available.
 
 ## Checks
 
-```bash
-# backend: API contract, 3+ levels, ~30 images, determinism, assets
-cd backend && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/python -m pytest -q
-
-# frontend: types, unit tests, lint, production build
-cd frontend && npm test && npx oxlint src && npm run build
+```sh
+# backend/
+.venv/bin/python -m pytest -q
+# frontend/
+npm test
+npm run lint -- src
+npm run build
+npm audit --omit=dev --audit-level=high
 ```
 
-## How it works
+GitHub Actions runs SQLite tests, PostgreSQL migrations and tests, frontend checks, container builds, nginx/WebSocket checks, and paired database/media backup recovery into a fresh project. CI must pass before deployment; configuring a workflow is not evidence it has run.
 
-- **Scene contract.** `GET /api/demo-board` returns `{ rootBoardId, nodes[] }`, a flat list of `board`, `image` and `note` nodes. Each node has `x/y/w/h` in its **parent board's local coordinates**, plus `z`: its height above that board's floor. The Pydantic models in `backend/app/main.py` and the types in `frontend/src/lib/types.ts` are the two halves of the contract.
-- **Fixture.** 8 boards over 4 levels (Summer Light → Colour story → Sunset palette → Peach tones), 34 images and 7 notes. The images are vector SVG posters, so they stay sharp at any zoom. Boards lie on the floor, prints are raised 10–46 units, and notes float at 70–120. `backend/scripts/generate_fixture.py` regenerates everything deterministically.
-- **One continuous, infinitely nested space** (`frontend/src/lib/space.ts`). A board's contents are drawn on its card face, scaled into the face's content window. The camera is always expressed in one board's own frame. As soon as a child board's card covers the whole viewport, the camera re-anchors into that child; when the current board stops covering the viewport, it re-anchors into the parent. Rendering is identical on both sides of a re-anchor, so the transition is invisible and precision never runs out. Only the current room and the one around it are drawn, with off-screen culling.
-- **Walking, not scaling.** The camera has an eye height (`SPACE.eye`). Something raised `z` above the floor gets a perspective boost `g = 1 / (1 − z·s / eye)`, applied about the screen centre. As you approach, notes grow faster than prints, and prints faster than the floor. The pointer adds parallax in proportion to height. When something gets close enough to reach the eye, it fades and flies past you. Raised objects cast softer, further shadows, and a light vignette darkens the edges of the room.
-- **No covers.** A board always draws its contents on its face, from the root down, as soon as the card is about 56 px on screen. Below that it's just a labelled stack. Far away, a board's title floats above it as a counter-scaled chip, so it stays readable over any scenery.
-- **Moving across levels.** While you drag, the deepest board under the pointer becomes the target, and the card re-parents into it live. Sizes are in each board's own units, so a card shrinks when you drag it into a board and grows when you drag it back out. A short morph (scaled about the grab point) keeps it under your pointer. On drop it's clamped inside the board's face. `localFromScreen` in `space.ts` inverts the depth projection, so raised cards track the pointer exactly.
-- **Scenery** (`frontend/src/lib/scenery.ts`). Six options: Studio (the plain dotted floor), Mountains, Clouds, Forest, Dunes, Cosmos. Each is an endless stack of low-poly "theatre flats" spaced one unit apart in depth. Every e-fold of zoom moves the camera ~0.85 layers forward through the stack. Each layer is scaled by `focal / depth` about a vanishing point, hazed toward the sky colour with distance, and faded out as you walk through it. Layers are generated per index from a seeded RNG, so the world never ends and looks the same when you come back. Pans and the pointer slide near layers more than far ones. Board floors become frosted (`SPACE.faceAlpha`) so the world shows through at every depth. The choice is remembered per browser.
-- **Adding things.** Drop or paste images (they keep their aspect ratio), videos (they preview inline and play up close), and any other file (a typed slab with name, size and an **Open** link up close). Things land in the board under the pointer, or in the board you're in when added from the menu, with a small pop-in. Notes and boards come from a restyled shadcn dialog.
-- **Camera engine** (`frontend/src/lib/cameraEngine.ts`). Wheel input moves a target camera, and the displayed camera glides after it in log-scale, which gives the fluid feel. Pans are direct, 1:1 with the pointer. Flights for breadcrumbs, double-click and Fit interpolate across levels in a common frame. The frame loop runs only while something is moving.
-- **2.5D objects.** Cards are `TactileSlab`s: a matte face, a pedestal side in a lighter tint (`*-side`), and a shadow tinted with the object's own colour. Hover tilts the card, press sinks it, drag lifts it with a tilt, and drop settles with one bounce. Board cards are real stacks (lilac + mint layers) that fan out on hover.
-- **Level of detail** comes from each card's on-screen size, not a global zoom: image tile → thumbnail + caption → large image + description; note title → full text.
-- **Tunables** (eye height, reveal thresholds, parallax, glide, zoom limits, tilt) all live in `frontend/src/lib/constants.ts`.
-- **Reduced motion.** No glide, no flights (instant jumps), no pointer parallax, no tilt or bounce. Depth stays, but only as a static cue.
+## Production configuration
 
-## Deliberate changes from the PRD
+For the standard Docker Compose deployment, copy `.env.production.example` to `.env.production`, restrict it to the operator (`chmod 600 .env.production`), and fill in private values. Zenith instead resolves the mappings in `zenith-compose.yml`. Never commit or print populated secret files or expanded configuration.
 
-Product direction after the first build, which supersedes these PRD points:
+| Variable | Requirement |
+| --- | --- |
+| `APP_ENV` | `production`, set by Compose. |
+| `PUBLIC_URL` | Exact public HTTPS origin, with no path/query. Used for links, cookies, and WebSocket origin validation. |
+| `SECRET_KEY` | Stable, randomly generated value of at least 32 characters. Generate with `python3 -c 'import secrets; print(secrets.token_urlsafe(48))'` and store privately. |
+| `DATABASE_URL` | Explicit PostgreSQL URL; preferably `postgresql+psycopg://zoomz:ENCODED_PASSWORD@db:5432/zoomz`. Percent-encode reserved characters in credentials. SQLite is rejected in production. |
+| `POSTGRES_PASSWORD` | Database password for the Compose PostgreSQL service, matching the URL. |
+| `STORAGE_DIR` | Absolute writable persistent-media path. Compose mounts `/data/uploads`. |
+| `SMTP_HOST`, `SMTP_PORT` | Values supplied for the provisioned Zenith instance. No automatic injection is assumed. |
+| `SMTP_ENCRYPTION` | Explicit `starttls`, `tls` (implicit TLS), or `none`. Use `none` only for an isolated instance relay explicitly documented by Zenith. TLS certificates are verified. |
+| `SMTP_USER`, `SMTP_PASSWORD` | Supply both if the instance relay requires authentication; otherwise leave both empty. |
+| `SMTP_FROM`, `SMTP_FROM_NAME` | Authorized sender email and optional display name. Existing combined `Name <address>` sender syntax also works. |
+| `SMTP_TIMEOUT` | Connection/socket timeout in seconds, 1–120; default 15. |
+| `MAX_UPLOAD_MB`, `UPLOAD_BODY_LIMIT` | Backend file limit and nginx body limit. Defaults 200 and `201m`; allow multipart overhead when changing them. |
+| `SPACE_QUOTA_MB` | Default 5120. Monitor available volume capacity separately. |
+| `TRUSTED_PROXY_CIDR` | Exact ingress network confirmed by the host. Default only trusts loopback. Never use `0.0.0.0/0`. Correct configuration is needed for per-client IP rate limits. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional. Register `PUBLIC_URL/api/auth/google/callback` with Google. |
 
-- **No "open board" action.** PRD §5/§6.2 described opening a child board by double-click or an **Open board** button. Now a board's contents are drawn on its face, and you enter it simply by zooming. That reverses PRD §6.3's "child-board contents are not drawn recursively". Double-click and Enter remain as shortcuts that fly you there.
-- **Infinite zoom.** PRD §6.2 asked to clamp zoom to a practical range. Zoom is now unlimited through the nesting, and only clamped inside a single board.
-- **Scroll moves you through depth.** PRD §6.2 had plain scroll pan the canvas. Now every scroll moves you closer or further, and you pan by dragging.
-- **Adding files (demo only).** PRD §4 ruled out uploads. To show what building a real moodboard would feel like, you can now drop, paste or pick images and files. They stay in the browser as object URLs, there's still no upload endpoint or persistence, and the backend is unchanged.
-- **No covers, and a scenery backdrop.** Boards show their contents from any distance. The plain floor can be swapped for a scenery you move through. The PRD's "Studio" dotted floor is still one of the options.
-- **The space is 2.5D with real parallax.** Items have heights and you approach them like walking through a room, inspired by the depth demo. It goes beyond the static slab depth of §6.5.
+Legacy development `SMTP_TLS` remains supported, but production requires explicit `SMTP_ENCRYPTION`. Missing or malformed production SMTP, URL, database, secret, and storage settings fail startup without exposing their values.
 
-## Known limitations
+All emails use the same sender. SMTP failures return a generic 503 and do not claim delivery success. Failed email sends do not commit new login tokens, invitations, or workspace memberships. A successful SMTP response means the relay accepted the message, not that the recipient received it.
 
-- Everything you add or move lasts only for the current session (by design; there is no persistence or upload yet).
-- A board's frame is fixed when the demo loads, so dropping many new things into a board doesn't make it grow. They're kept inside its face.
-- Desktop-first. Touch panning works through pointer events, but there's no pinch-zoom gesture on touch screens and no mobile layout.
-- No minimap or search (both optional or deferred in the PRD).
-- Zoom is unlimited *into boards*; inside a single board you can zoom up to 14× its own scale (enough for any print to fill the screen).
-- Dragging a card is approximate for strongly raised items very close to the camera (the perspective boost is taken from the moment you grab it).
-- Fonts load from Google Fonts; offline, the UI falls back to system fonts.
-- The frontend bundle is ~500 kB (≈160 kB gzipped). Vite warns about chunk size, but it's acceptable for a demo.
+Tests use SMTP doubles; no real emails are sent. After provisioning, request a magic link and an invitation and confirm both arrive through Zenith. Confirm their HTTPS links work and responses expose no development links. Real Zenith delivery has not been verified.
 
-## Deployment notes (Zenith.hosting)
+## Containers and migrations
 
-The frontend and API are separate, stateless, container-friendly services. Neither needs a volume or database. In production the frontend should be served as static files (`npm run build` → `frontend/dist`), with `/api` routed to the FastAPI service (`uvicorn app.main:app --host 0.0.0.0 --port 8000`). The frontend uses relative `/api` URLs by default. `VITE_API_BASE` can point it at a separate origin at build time, though that would need CORS, which the API doesn't enable today.
+The root `Dockerfile` builds the frontend, then packages nginx and the Python backend in one non-root app image. This matches Zenith's single-source-build contract without changing the source architecture. A small Bash entrypoint stops the container if either child exits and forwards shutdown signals. PostgreSQL 17 remains a separate service.
 
-No `zenith-compose.yml` is included. Zenith's manifest syntax, routing, ports and environment conventions haven't been checked against its current developer guide, and the PRD asks not to guess them. **Open question for deployment:** how does Zenith route a path prefix (`/api`) from the public frontend service to a second internal service, and which port and env-var conventions does it expect?
+`compose.production.yml` is the operator/local Compose variant. Only nginx binds a loopback host port, 8080 by default. A trusted HTTPS ingress must forward to it. Uvicorn listens only on the app container's loopback port; PostgreSQL has no public endpoint. `zenith-compose.yml` is the distinct published Zenith manifest.
+
+```sh
+docker compose --env-file .env.production -p zoomz -f compose.production.yml config -q
+docker compose --env-file .env.production -p zoomz -f compose.production.yml up -d --build --wait
+curl --fail http://127.0.0.1:8080/api/health
+```
+
+The backend checks media writability, runs `alembic upgrade head`, then starts Uvicorn without reload or URL access logging. Keep exactly **one backend replica and one worker**; live rooms and rate limits are process-local. PostgreSQL uses connection pre-ping and locks each space before applying edits/allocating sequence numbers.
+
+For an explicit migration with a configured environment, from `backend/`:
+
+```sh
+.venv/bin/alembic upgrade head
+.venv/bin/alembic check
+```
+
+nginx preserves SPA routes and proxies `/api/` and WebSocket upgrades to Uvicorn on loopback. It overwrites forwarded headers, reserves upload capacity, and keeps URLs/tokens out of access logs. Uvicorn trusts forwarded headers only from loopback. Host ingress logs must also redact query strings and invitation/join/public token paths.
+
+Keep the `postgres-data` and `uploads` volumes across updates. Never run `docker compose down -v` against real data. With host bind mounts, prepare media ownership for UID/GID 10001. Production startup requires a media mount point, or a directory beneath one, and checks writability. A mount alone cannot prove the host's retention/durability guarantees; verify those with Zenith. Optional video transcoding needs ffmpeg, which is not installed in the minimal image; original-file playback remains available.
+
+Frontend builds contain no SMTP, database, or OAuth secrets and use same-origin API URLs. Do not set secret `VITE_*` variables. Backend runtime dependencies are pinned in `requirements.lock`; review/regenerate that file when requirements change.
+
+## Zenith deployment handoff
+
+The [official Compose reference](https://docs.zenith.hosting/content/zenith-compose-reference.md) documents the mappings used by `zenith-compose.yml`:
+
+- `PUBLIC_URL` aliases `ZENITH_PUBLIC_URL`.
+- SMTP host/port/user/password/from alias `ZENITH_SMTP_HOST`, `ZENITH_SMTP_PORT`, `ZENITH_SMTP_USER`, `ZENITH_SMTP_PASS`, and `ZENITH_SMTP_FROM`, scoped only to `app`. The documented relay uses port 587 and STARTTLS.
+- A generated database password goes to PostgreSQL and the app's database URL. A separate generated stable signing key goes only to the app.
+- Private storage declarations cover PostgreSQL and uploaded media.
+- The only public endpoint is app port 8080. Zenith terminates HTTPS. Public image dependencies and one root `build: .` app follow the [container guide](https://docs.zenith.hosting/content/containerise.md).
+
+Validation actually performed: Docker Compose parses the manifest; both schemas supplied by the official skill pass; the npm CLI's published schema and applicable semantic checks pass via `deploy/check_manifest.mjs`.
+
+`NO_COLOR=1 zenith check --upload-size` was also run with npm CLI **0.1.4** and **fails** its stricter preview policy on the published `env` and `storage` blocks. The supplied skill schemas describe broader preview behavior than that npm release. This does not prove the published manifest invalid, nor does schema success prove server acceptance. No preview variant was created that drops required SMTP/secrets. Verify the target server/CLI compatibility before an authorized preview.
+
+Next operator actions:
+
+1. Let the CI container/PostgreSQL/recovery checks pass, or run their commands with a running Docker daemon.
+2. Confirm Zenith volume ownership supports UID/GID 10001, identify the exact ingress CIDR for `TRUSTED_PROXY_CIDR`, and arrange independent backups.
+3. Confirm catalogue licensing before publication. No license file exists; the manifest accurately says `UNLICENSED` and does not grant a new license.
+4. With explicit permission, commit/push the reviewed files to the public repository and complete Zenith account/GitHub/Developer Agreement prerequisites. Then follow the [official publishing workflow](https://docs.zenith.hosting/content/publish.md), which builds the pinned GitHub source without requiring a separately published app image.
+5. Once provisioned, run every acceptance check below, especially actual SMTP delivery and restore. No credentials need to be copied into source.
+
+No authentication, preview upload, image publication, commit, push, or deployment was performed. Manifest server admission and the real instance's SMTP, ingress, volume permissions, and backup facilities remain unverified.
+
+## Backups and recovery
+
+`deploy/backup.py` requires Python 3.12+, Docker Compose, and operator access. It briefly stops the single app writer, dumps PostgreSQL, archives all media, includes SHA-256 checksums, then restarts the backend if it was running. Backups use private permissions. Retention defaults to seven days and deletes only matching older backup files after a successful new archive.
+
+```sh
+backend/.venv/bin/python deploy/backup.py --project zoomz backup /mnt/independent-backups/zoomz --keep-days 7
+```
+
+Schedule this daily through an available operator/hosting scheduler. Copy completed archives to encrypted off-host storage with its own seven-day-or-longer retention. A second directory or volume on the same failed host is not disaster recovery. Restrict access: the archive contains user content and account data. Keep configuration secrets separately in a secure store.
+
+**Before accepting real user data, confirm the scheduler, independent destination, copy-failure alert, and restore drill.** These hosting-specific facilities are not configured here. If Zenith gives no Compose/operator access, arrange its supported database-and-media backup/export mechanism instead. Database-only snapshots are insufficient.
+
+Restore only a trusted archive into an **empty recovery project with fresh volumes**, using a separately prepared recovery environment and a different `WEB_PORT`. The utility refuses populated database/media targets and does not erase existing volumes.
+
+```sh
+# Build the recovery images first.
+docker compose --env-file .env.recovery -p zoomz-recovery -f compose.production.yml build
+backend/.venv/bin/python deploy/backup.py --env-file .env.recovery --project zoomz-recovery restore /path/to/zoomz-backup-TIMESTAMP-ID.tar --confirm-empty-target
+docker compose --env-file .env.recovery -p zoomz-recovery -f compose.production.yml up -d --wait
+```
+
+Run the acceptance checks before switching traffic. Keep the original project intact until recovery is verified. An unsuccessful restore may leave a partial recovery target; inspect it and use new empty recovery volumes for another attempt.
+
+## Deployment acceptance checklist
+
+- [ ] Frontend and a directly loaded nested URL work over the correct public HTTPS origin.
+- [ ] `/api/health` succeeds; production API docs are disabled.
+- [ ] A new user receives and completes a Zenith SMTP magic-link sign-in.
+- [ ] An existing user sends an invitation; its recipient joins with the intended role.
+- [ ] A space can be edited and changes survive reload.
+- [ ] Upload an image and confirm the original/preview remain after backend restart.
+- [ ] Two browser sessions see edits and cursors through the production WebSocket proxy.
+- [ ] Viewers/strangers cannot edit or access private files; production cookies are Secure/HttpOnly.
+- [ ] Database and uploads survive container recreation with the same volumes.
+- [ ] A scheduled paired backup reaches independent storage and is restored successfully.
+- [ ] Ingress/application logs contain no sign-in tokens, SMTP credentials, or cookie values.
+
+## Current verification and limitations
+
+Local verification: 59 backend tests pass with SQLite, with one PostgreSQL concurrency test skipped; frontend tests (16), TypeScript/build, lint, and runtime-dependency audit pass. SQLite migration/check/repeated upgrade and PostgreSQL offline SQL generation pass. Lint retains existing warnings. The local Node 23 installation is outside Vitest's declared support; CI and the container use Node 24.
+
+The full npm audit reports seven high-severity build-tool findings rooted in the unpatched [braces recursion advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), through the shadcn CLI dependency tree. Runtime dependencies report zero findings. These tools are absent from the final static nginx image. Build only trusted repository content; do not apply npm's suggested major downgrade blindly.
+
+Docker's daemon was stopped locally. Container builds, real PostgreSQL execution, end-to-end restore, and the new GitHub Actions workflow remain unverified until CI runs. Real Zenith SMTP, ingress, persistent-volume ownership/durability, backups, and production browser checks remain acceptance blockers. Optional Google/SMTP integrations require instance-specific configuration.
+
+Bundled sample artwork is 34 deterministic SVG illustrations generated by `backend/scripts/generate_fixture.py`, alongside 8 boards and 7 notes. Runtime fonts use Google Fonts with local system fallbacks.
