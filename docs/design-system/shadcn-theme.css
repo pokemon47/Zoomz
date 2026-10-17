@@ -1,0 +1,30 @@
+/* Map Zoomboard tokens onto shadcn/ui CSS variables (Tailwind v4 @theme inline style).
+   Paste into src/index.css after importing tokens.css. Adjust if the project uses Tailwind v3 (then use tailwind.config theme.extend with var(--...)). */
+:root {
+  --background: var(--canvas);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--tomato);
+  --primary-foreground: #17131F;
+  --secondary: var(--surface);
+  --secondary-foreground: var(--ink);
+  --muted: var(--surface-sunk);
+  --muted-foreground: var(--ink-muted);
+  --accent: var(--cobalt);
+  --accent-foreground: var(--on-cobalt);
+  --destructive: var(--danger);
+  --border: var(--surface-side);
+  --input: var(--surface-sunk);
+  --ring: var(--cobalt);
+  --radius: 14px;
+}
+@theme inline {
+  --color-canvas: var(--canvas); --color-surface: var(--surface); --color-surface-sunk: var(--surface-sunk);
+  --color-ink: var(--ink); --color-ink-muted: var(--ink-muted);
+  --color-tomato: var(--tomato); --color-cobalt: var(--cobalt); --color-lemon: var(--lemon); --color-mint: var(--mint); --color-lilac: var(--lilac);
+  --font-display: var(--font-display); --font-sans: var(--font-sans); --font-mono: var(--font-mono);
+  --shadow-lift-1: var(--lift-1); --shadow-lift-2: var(--lift-2); --shadow-lift-3: var(--lift-3); --shadow-press: var(--press);
+}

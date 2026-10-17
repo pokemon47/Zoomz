@@ -1,0 +1,106 @@
+# Published runtime manifest. Preview policy differs; see README.
+x-zenith:
+  catalog:
+    name: Zoomz
+    description: Collaborative moodboards with continuously zoomable nested boards.
+    authors: [burtle-dev]
+    tags: [moodboard, collaboration, images]
+    source: https://github.com/pokemon47/Zoomz
+    # No license grant exists in this repository. Do not invent one for publishing.
+    license: UNLICENSED
+  expose:
+    - service: app
+      port: 8080
+      web: true
+  storage:
+    database:
+      volume: postgres-data
+      label: PostgreSQL data
+      public: false
+    media:
+      volume: uploads
+      label: Uploaded originals and previews
+      public: false
+  env:
+    PUBLIC_URL:
+      alias: ZENITH_PUBLIC_URL
+      services: [app]
+    SECRET_KEY:
+      generate: '([A-Za-z0-9]{11})([A-Za-z0-9]{11})([A-Za-z0-9]{11})([A-Za-z0-9]{11})'
+      services: [app]
+    POSTGRES_PASSWORD:
+      generate: '([A-Za-z0-9]{12})([A-Za-z0-9]{12})([A-Za-z0-9]{12})'
+      services: [db]
+    DATABASE_URL:
+      template: 'postgresql+psycopg://zoomz:{POSTGRES_PASSWORD}@db:5432/zoomz'
+      services: [app]
+    SMTP_HOST:
+      alias: ZENITH_SMTP_HOST
+      services: [app]
+    SMTP_PORT:
+      alias: ZENITH_SMTP_PORT
+      services: [app]
+    SMTP_USER:
+      alias: ZENITH_SMTP_USER
+      services: [app]
+    SMTP_PASSWORD:
+      alias: ZENITH_SMTP_PASS
+      services: [app]
+    SMTP_FROM:
+      alias: ZENITH_SMTP_FROM
+      services: [app]
+    TRUSTED_PROXY_CIDR:
+      input:
+        label: Trusted Zenith ingress CIDR
+        description: Confirm the exact ingress CIDR with Zenith before accepting users. Never trust all networks.
+        default: '127.0.0.1/32'
+      services: [app]
+    GOOGLE_CLIENT_ID:
+      input:
+        label: Google OAuth client ID (optional)
+      services: [app]
+    GOOGLE_CLIENT_SECRET:
+      input:
+        label: Google OAuth client secret (optional)
+        secret: true
+      services: [app]
+services:
+  app:
+    build: .
+    user: '10001:10001'
+    environment:
+      APP_ENV: production
+      STORAGE_DIR: /data/uploads
+      SMTP_ENCRYPTION: starttls
+      SMTP_FROM_NAME: Zoomz
+      SMTP_TIMEOUT: '15'
+      MAX_UPLOAD_MB: '200'
+      SPACE_QUOTA_MB: '5120'
+      UPLOAD_BODY_LIMIT: 201m
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: zoomz
+      POSTGRES_DB: zoomz
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD, pg_isready, -U, zoomz, -d, zoomz]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 12
+volumes:
+  postgres-data:
+  uploads:

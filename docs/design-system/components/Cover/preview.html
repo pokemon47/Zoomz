@@ -1,0 +1,41 @@
+<!-- @dsCard height=300 -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Zoomboard</title>
+<style>
+html,body{margin:0;height:100%}
+body{background:var(--canvas) radial-gradient(var(--canvas-dot) 1.6px,transparent 1.8px) 0 0/24px 24px;color:var(--ink);overflow:hidden}
+.cover{position:relative;height:300px;overflow:hidden}
+.art{position:absolute;top:0;left:480px;width:480px;height:300px;overflow:hidden}
+.art svg{display:block;width:480px;height:300px}
+.cast{fill:var(--cast)}
+.tomato{fill:var(--tomato)}.cobalt{fill:var(--cobalt)}.lemon{fill:var(--lemon)}.lilac{fill:var(--lilac)}
+.tomato-side{fill:var(--tomato-side)}.cobalt-side{fill:var(--cobalt-side)}.lemon-side{fill:var(--lemon-side)}
+.tomato-dk{fill:var(--tomato);opacity:.55}.cobalt-dk{fill:var(--cobalt);opacity:.55}.lemon-dk{fill:var(--lemon);opacity:.55}
+.words{position:absolute;left:var(--space-8);bottom:var(--space-8);max-width:440px}
+.name{margin:0;font:800 76px/.92 "Bricolage Grotesque","Arial Black",system-ui,sans-serif;letter-spacing:-.035em}
+.tag{margin:var(--space-2) 0 0 3px;font:500 14px/20px "DM Sans",system-ui,sans-serif;color:var(--ink-muted)}
+</style></head><body><div class="cover">
+<div class="art" aria-hidden="true"><svg viewBox="0 0 480 300">
+<!--
+  blocks      three isometric slabs, faces tomato / cobalt / lemon with their -side tokens as the visible sides, plus a lilac marble — the palette as physical objects
+  arrangement nested stack receding up-right: each slab sits on the one below, smaller, like zooming one board deeper
+  pattern     literal motif "a board you fall into": stacked iso slabs as frosted pastel pedestals on the dotted canvas (canvas-dot)
+  scales      slab thickness 14 (lift-2 x2.3), step inset space-6, marble r = space-4
+-->
+<ellipse class="cast" cx="300" cy="244" rx="170" ry="40"/>
+<!-- slab 1 tomato -->
+<polygon class="tomato-side" points="140,190 300,282 300,298 140,206"/>
+<polygon class="tomato-dk" points="300,282 460,190 460,206 300,298"/>
+<polygon class="tomato" points="300,98 460,190 300,282 140,190"/>
+<!-- slab 2 cobalt -->
+<polygon class="cobalt-side" points="188,166 300,230 300,246 188,182"/>
+<polygon class="cobalt-dk" points="300,230 412,166 412,182 300,246"/>
+<polygon class="cobalt" points="300,102 412,166 300,230 188,166"/>
+<!-- slab 3 lemon -->
+<polygon class="lemon-side" points="236,138 300,174 300,190 236,154"/>
+<polygon class="lemon-dk" points="300,174 364,138 364,154 300,190"/>
+<polygon class="lemon" points="300,102 364,138 300,174 236,138"/>
+<circle class="lilac" cx="300" cy="124" r="16"/>
+</svg></div>
+<div class="words"><h1 class="name">Zoomboard</h1><p class="tag">A board you fall into. Bold, tactile, 2.5D — made for makers.</p></div>
+</div></body></html>
