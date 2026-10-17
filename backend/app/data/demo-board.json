@@ -1,0 +1,676 @@
+{
+  "rootBoardId": "root",
+  "nodes": [
+    {
+      "id": "root",
+      "type": "board",
+      "parentId": null,
+      "x": 0,
+      "y": 0,
+      "w": 280,
+      "h": 300,
+      "content": {
+        "title": "Summer Light",
+        "description": "A studio moodboard for the summer collection: warm colour, soft texture, bold shapes."
+      }
+    },
+    {
+      "id": "colour",
+      "type": "board",
+      "parentId": "root",
+      "x": -3,
+      "y": 16,
+      "w": 280,
+      "h": 300,
+      "content": {
+        "title": "Colour story",
+        "description": "Late-afternoon warmth: coral, apricot and a deep plum to ground it."
+      }
+    },
+    {
+      "id": "texture",
+      "type": "board",
+      "parentId": "root",
+      "x": 317,
+      "y": 15,
+      "w": 280,
+      "h": 300,
+      "content": {
+        "title": "Texture & material",
+        "description": "Linen, paper and clay. Everything should look like you could touch it."
+      }
+    },
+    {
+      "id": "form",
+      "type": "board",
+      "parentId": "root",
+      "x": 635,
+      "y": -15,
+      "w": 280,
+      "h": 300,
+      "content": {
+        "title": "Shape & type",
+        "description": "Chunky geometry and friendly letterforms."
+      }
+    },
+    {
+      "id": "root-img-1",
+      "type": "image",
+      "parentId": "root",
+      "x": 954,
+      "y": -11,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Beach umbrellas",
+        "src": "/api/assets/art/root-img-1.svg",
+        "alt": "Abstract poster of coral and butter-yellow half circles over a blue horizon"
+      }
+    },
+    {
+      "id": "root-img-2",
+      "type": "image",
+      "parentId": "root",
+      "x": 31,
+      "y": 346,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Pool tiles",
+        "src": "/api/assets/art/root-img-2.svg",
+        "alt": "Grid of soft blue and mint squares like a swimming pool floor"
+      }
+    },
+    {
+      "id": "root-img-3",
+      "type": "image",
+      "parentId": "root",
+      "x": 351,
+      "y": 368,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Lemon crate",
+        "src": "/api/assets/art/root-img-3.svg",
+        "alt": "Stacked yellow circles on a cream background like lemons in a crate"
+      }
+    },
+    {
+      "id": "root-img-4",
+      "type": "image",
+      "parentId": "root",
+      "x": 697,
+      "y": 369,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Night swim",
+        "src": "/api/assets/art/root-img-4.svg",
+        "alt": "Dark navy field with a single pale moon and rippling stripes"
+      }
+    },
+    {
+      "id": "root-img-5",
+      "type": "image",
+      "parentId": "root",
+      "x": 1009,
+      "y": 351,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Striped awning",
+        "src": "/api/assets/art/root-img-5.svg",
+        "alt": "Bold vertical stripes in coral and cream"
+      }
+    },
+    {
+      "id": "root-img-6",
+      "type": "image",
+      "parentId": "root",
+      "x": -3,
+      "y": 722,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Garden arch",
+        "src": "/api/assets/art/root-img-6.svg",
+        "alt": "A tall mint arch framing a coral sun"
+      }
+    },
+    {
+      "id": "root-note-1",
+      "type": "note",
+      "parentId": "root",
+      "x": 322,
+      "y": 748,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Brief",
+        "body": "Summer collection for a small homeware brand. Warm, playful and touchable. Nothing that looks like a corporate deck."
+      }
+    },
+    {
+      "id": "root-note-2",
+      "type": "note",
+      "parentId": "root",
+      "x": 632,
+      "y": 744,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Mood in three words",
+        "body": "Sun-bleached, chunky, generous. Think beach towels and ceramic tableware, not luxury minimalism."
+      }
+    },
+    {
+      "id": "sunset",
+      "type": "board",
+      "parentId": "colour",
+      "x": 15,
+      "y": -13,
+      "w": 280,
+      "h": 300,
+      "content": {
+        "title": "Sunset palette",
+        "description": "The hour before dusk, from peach to violet."
+      }
+    },
+    {
+      "id": "colour-img-1",
+      "type": "image",
+      "parentId": "colour",
+      "x": 306,
+      "y": 2,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Apricot wall",
+        "src": "/api/assets/art/colour-img-1.svg",
+        "alt": "Warm apricot rectangle with a soft shadow line"
+      }
+    },
+    {
+      "id": "colour-img-2",
+      "type": "image",
+      "parentId": "colour",
+      "x": 636,
+      "y": -14,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Plum shadow",
+        "src": "/api/assets/art/colour-img-2.svg",
+        "alt": "Deep plum arch on a cream background"
+      }
+    },
+    {
+      "id": "colour-img-3",
+      "type": "image",
+      "parentId": "colour",
+      "x": 949,
+      "y": 0,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Coral swatch",
+        "src": "/api/assets/art/colour-img-3.svg",
+        "alt": "Three overlapping coral circles in different strengths"
+      }
+    },
+    {
+      "id": "colour-img-4",
+      "type": "image",
+      "parentId": "colour",
+      "x": 54,
+      "y": 370,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Heat haze",
+        "src": "/api/assets/art/colour-img-4.svg",
+        "alt": "Wavy horizontal bands from red to pale yellow"
+      }
+    },
+    {
+      "id": "colour-img-5",
+      "type": "image",
+      "parentId": "colour",
+      "x": 372,
+      "y": 365,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Paint chips",
+        "src": "/api/assets/art/colour-img-5.svg",
+        "alt": "Grid of warm paint chip squares"
+      }
+    },
+    {
+      "id": "colour-note-1",
+      "type": "note",
+      "parentId": "colour",
+      "x": 665,
+      "y": 408,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Palette rule",
+        "body": "Coral leads, apricot supports, plum only for type and shadows. Keep blues for accents."
+      }
+    },
+    {
+      "id": "fabric",
+      "type": "board",
+      "parentId": "texture",
+      "x": -7,
+      "y": -7,
+      "w": 280,
+      "h": 300,
+      "content": {
+        "title": "Fabric swatches",
+        "description": "Woven samples shortlisted for the lookbook set."
+      }
+    },
+    {
+      "id": "texture-img-1",
+      "type": "image",
+      "parentId": "texture",
+      "x": 315,
+      "y": -5,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Raw linen",
+        "src": "/api/assets/art/texture-img-1.svg",
+        "alt": "Fine cross-hatched lines in natural beige"
+      }
+    },
+    {
+      "id": "texture-img-2",
+      "type": "image",
+      "parentId": "texture",
+      "x": 642,
+      "y": -16,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Clay pots",
+        "src": "/api/assets/art/texture-img-2.svg",
+        "alt": "Three terracotta arches of different heights"
+      }
+    },
+    {
+      "id": "texture-img-3",
+      "type": "image",
+      "parentId": "texture",
+      "x": 971,
+      "y": 4,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Torn paper",
+        "src": "/api/assets/art/texture-img-3.svg",
+        "alt": "Cream paper pieces with jagged edges on sage"
+      }
+    },
+    {
+      "id": "texture-img-4",
+      "type": "image",
+      "parentId": "texture",
+      "x": 30,
+      "y": 373,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Olive grove",
+        "src": "/api/assets/art/texture-img-4.svg",
+        "alt": "Rolling sage green hills with brown earth"
+      }
+    },
+    {
+      "id": "texture-img-5",
+      "type": "image",
+      "parentId": "texture",
+      "x": 349,
+      "y": 373,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Pebbles",
+        "src": "/api/assets/art/texture-img-5.svg",
+        "alt": "Smooth rounded stones in warm greys"
+      }
+    },
+    {
+      "id": "texture-note-1",
+      "type": "note",
+      "parentId": "texture",
+      "x": 698,
+      "y": 409,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Material check",
+        "body": "Ask the supplier for linen samples in oat and rust before the shoot on Friday."
+      }
+    },
+    {
+      "id": "letters",
+      "type": "board",
+      "parentId": "form",
+      "x": 2,
+      "y": 3,
+      "w": 280,
+      "h": 300,
+      "content": {
+        "title": "Lettering",
+        "description": "Display type studies for the campaign headline."
+      }
+    },
+    {
+      "id": "form-img-1",
+      "type": "image",
+      "parentId": "form",
+      "x": 308,
+      "y": -16,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Big shapes",
+        "src": "/api/assets/art/form-img-1.svg",
+        "alt": "A cobalt circle, butter square and coral triangle composition"
+      }
+    },
+    {
+      "id": "form-img-2",
+      "type": "image",
+      "parentId": "form",
+      "x": 631,
+      "y": -11,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Stacked blocks",
+        "src": "/api/assets/art/form-img-2.svg",
+        "alt": "Chunky rounded rectangles stacked like toy blocks"
+      }
+    },
+    {
+      "id": "form-img-3",
+      "type": "image",
+      "parentId": "form",
+      "x": 38,
+      "y": 370,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Half moons",
+        "src": "/api/assets/art/form-img-3.svg",
+        "alt": "Rows of half circles alternating periwinkle and butter"
+      }
+    },
+    {
+      "id": "form-img-4",
+      "type": "image",
+      "parentId": "form",
+      "x": 349,
+      "y": 375,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Soft grid",
+        "src": "/api/assets/art/form-img-4.svg",
+        "alt": "Rounded squares on a dark ground"
+      }
+    },
+    {
+      "id": "form-note-1",
+      "type": "note",
+      "parentId": "form",
+      "x": 687,
+      "y": 402,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Shape language",
+        "body": "Everything has rounded corners. Circles for product, arches for windows, blocks for type."
+      }
+    },
+    {
+      "id": "peach",
+      "type": "board",
+      "parentId": "sunset",
+      "x": -9,
+      "y": -14,
+      "w": 280,
+      "h": 300,
+      "content": {
+        "title": "Peach tones",
+        "description": "The softest end of the palette, for backgrounds and packaging."
+      }
+    },
+    {
+      "id": "sunset-img-1",
+      "type": "image",
+      "parentId": "sunset",
+      "x": 307,
+      "y": 1,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Last light",
+        "src": "/api/assets/art/sunset-img-1.svg",
+        "alt": "Large orange sun setting behind violet bands"
+      }
+    },
+    {
+      "id": "sunset-img-2",
+      "type": "image",
+      "parentId": "sunset",
+      "x": 654,
+      "y": 14,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Dusk ridge",
+        "src": "/api/assets/art/sunset-img-2.svg",
+        "alt": "Layered purple mountain silhouettes under a pink sky"
+      }
+    },
+    {
+      "id": "sunset-img-3",
+      "type": "image",
+      "parentId": "sunset",
+      "x": 32,
+      "y": 363,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Neon pier",
+        "src": "/api/assets/art/sunset-img-3.svg",
+        "alt": "Pink and violet stripes reflected in dark water"
+      }
+    },
+    {
+      "id": "sunset-img-4",
+      "type": "image",
+      "parentId": "sunset",
+      "x": 347,
+      "y": 344,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Orange grove",
+        "src": "/api/assets/art/sunset-img-4.svg",
+        "alt": "Rows of small orange circles on a purple ground"
+      }
+    },
+    {
+      "id": "sunset-note-1",
+      "type": "note",
+      "parentId": "sunset",
+      "x": 673,
+      "y": 388,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Use sparingly",
+        "body": "The violet end is for night-time shots only. Daytime images stay on the peach side."
+      }
+    },
+    {
+      "id": "peach-img-1",
+      "type": "image",
+      "parentId": "peach",
+      "x": 7,
+      "y": 14,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Peach skin",
+        "src": "/api/assets/art/peach-img-1.svg",
+        "alt": "Soft peach circle with a darker blush"
+      }
+    },
+    {
+      "id": "peach-img-2",
+      "type": "image",
+      "parentId": "peach",
+      "x": 327,
+      "y": -14,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Linen tray",
+        "src": "/api/assets/art/peach-img-2.svg",
+        "alt": "Pale peach rectangles stacked like paper"
+      }
+    },
+    {
+      "id": "peach-img-3",
+      "type": "image",
+      "parentId": "peach",
+      "x": 649,
+      "y": 7,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Blossom",
+        "src": "/api/assets/art/peach-img-3.svg",
+        "alt": "Petal shapes in peach and cream radiating from a centre"
+      }
+    },
+    {
+      "id": "fabric-img-1",
+      "type": "image",
+      "parentId": "fabric",
+      "x": 15,
+      "y": -4,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Indigo twill",
+        "src": "/api/assets/art/fabric-img-1.svg",
+        "alt": "Diagonal indigo and cream twill weave"
+      }
+    },
+    {
+      "id": "fabric-img-2",
+      "type": "image",
+      "parentId": "fabric",
+      "x": 316,
+      "y": -14,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Mustard check",
+        "src": "/api/assets/art/fabric-img-2.svg",
+        "alt": "Mustard and navy gingham check"
+      }
+    },
+    {
+      "id": "fabric-img-3",
+      "type": "image",
+      "parentId": "fabric",
+      "x": 657,
+      "y": 0,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Rust stripe",
+        "src": "/api/assets/art/fabric-img-3.svg",
+        "alt": "Rust red and cream ticking stripes"
+      }
+    },
+    {
+      "id": "fabric-img-4",
+      "type": "image",
+      "parentId": "fabric",
+      "x": 42,
+      "y": 374,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Oat boucl\u00e9",
+        "src": "/api/assets/art/fabric-img-4.svg",
+        "alt": "Speckled oatmeal texture with tiny loops"
+      }
+    },
+    {
+      "id": "letters-img-1",
+      "type": "image",
+      "parentId": "letters",
+      "x": -7,
+      "y": 3,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Fat A",
+        "src": "/api/assets/art/letters-img-1.svg",
+        "alt": "A chunky letter A built from rounded shapes"
+      }
+    },
+    {
+      "id": "letters-img-2",
+      "type": "image",
+      "parentId": "letters",
+      "x": 334,
+      "y": -5,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Bubble O",
+        "src": "/api/assets/art/letters-img-2.svg",
+        "alt": "A thick ring letter O in coral on cream"
+      }
+    },
+    {
+      "id": "letters-img-3",
+      "type": "image",
+      "parentId": "letters",
+      "x": 654,
+      "y": -8,
+      "w": 200,
+      "h": 290,
+      "content": {
+        "title": "Stencil S",
+        "src": "/api/assets/art/letters-img-3.svg",
+        "alt": "Two stacked arches forming a stencil S"
+      }
+    },
+    {
+      "id": "letters-note-1",
+      "type": "note",
+      "parentId": "letters",
+      "x": 40,
+      "y": 407,
+      "w": 220,
+      "h": 190,
+      "content": {
+        "title": "Headline",
+        "body": "Try the fat A and bubble O together at poster size. Check legibility at thumbnail scale."
+      }
+    }
+  ]
+}
