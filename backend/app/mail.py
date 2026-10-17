@@ -1,4 +1,4 @@
-"""Outgoing email. With no SMTP configured (local development) messages go to the log."""
+"""Transactional email through the instance SMTP service. Never log message bodies."""
 
 from __future__ import annotations
 
@@ -7,15 +7,20 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from html import escape
+from email.utils import formataddr, parseaddr
 
 from .config import settings
 
 log = logging.getLogger("zoomz.mail")
 
 
+class DeliveryError(Exception):
+    """Safe error for the API boundary; SMTP replies and credentials stay private."""
+
+
 def send(to: str, subject: str, text: str, button: tuple[str, str] | None = None) -> None:
     msg = EmailMessage()
-    msg["From"] = settings.smtp_from
+    msg["From"] = formataddr((settings.smtp_from_name, parseaddr(settings.smtp_from)[1])) if settings.smtp_from_name else settings.smtp_from
     msg["To"] = to
     msg["Subject"] = subject
     body = text + (f"\n\n{button[0]}: {button[1]}\n" if button else "")
@@ -30,20 +35,27 @@ def send(to: str, subject: str, text: str, button: tuple[str, str] | None = None
             subtype="html",
         )
     if not settings.smtp_host:
-        log.warning("SMTP not configured; email to %s — %s\n%s", to, subject, body)
+        if not settings.dev:
+            raise DeliveryError("Email delivery is unavailable. Try again later.")
+        log.info("Development email not sent; use the development link in the response.")
         return
     ctx = ssl.create_default_context()
-    if settings.smtp_port == 465:
-        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, context=ctx, timeout=15) as s:
-            _login_send(s, msg)
-    else:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as s:
-            if settings.smtp_tls:
-                s.starttls(context=ctx)
-            _login_send(s, msg)
+    try:
+        if settings.mail_encryption == "tls":
+            with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, context=ctx, timeout=settings.smtp_timeout) as s:
+                _login_send(s, msg)
+        else:
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=settings.smtp_timeout) as s:
+                if settings.mail_encryption == "starttls":
+                    s.starttls(context=ctx)
+                _login_send(s, msg)
+    except (smtplib.SMTPException, OSError) as exc:
+        log.warning("SMTP delivery failed (%s)", type(exc).__name__)
+        raise DeliveryError("Email delivery is unavailable. Try again later.") from None
 
 
 def _login_send(s: smtplib.SMTP, msg: EmailMessage) -> None:
     if settings.smtp_user:
         s.login(settings.smtp_user, settings.smtp_password or "")
-    s.send_message(msg)
+    if s.send_message(msg):
+        raise smtplib.SMTPRecipientsRefused({})

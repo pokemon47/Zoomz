@@ -270,16 +270,20 @@ def apply(db: Session, space: Space, user: Optional[User], base_role: str, op: A
     """Apply one operation (or a batch) atomically. Returns the broadcast message."""
     if not isinstance(op, dict) or op.get("type") not in (*HANDLERS, "batch"):
         raise OpError("unknown operation")
-    ctx = Ctx(db, space, user, base_role)
     ops = op.get("ops") if op["type"] == "batch" else [op]
     if not isinstance(ops, list) or not ops or len(ops) > MAX_BATCH:
         raise OpError("a batch needs 1–500 operations")
     try:
+        # Lock before reading/editing nodes, and refresh an already-loaded identity.
+        # Concurrent PostgreSQL requests must not allocate the same sequence number.
+        locked = db.scalar(select(Space).where(Space.id == space.id).with_for_update().execution_options(populate_existing=True))
+        if locked is None:
+            raise OpError("This board no longer exists.", 404)
+        ctx = Ctx(db, locked, user, base_role)
         for o in ops:
             if not isinstance(o, dict) or o.get("type") not in HANDLERS:
                 raise OpError("unknown operation")
             HANDLERS[o["type"]](ctx, o.get("node") if o["type"] == "create" else o)
-        locked = db.get(Space, space.id, with_for_update=True) or space
         locked.seq += 1
         locked.updated_at = now()
         msg = {"t": "op", "seq": locked.seq, "by": user.id if user else None, "cid": op.get("cid"), "changes": ctx.changes}

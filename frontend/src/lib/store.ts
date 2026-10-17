@@ -61,6 +61,9 @@ export type SceneSnapshot = {
 
 type Pending = { cid: string; op: Op; sent: boolean; ids: string[] }
 
+/** Largest edit sent over the live socket; anything bigger goes over HTTP. */
+const LIVE_FRAME_LIMIT = 60_000
+
 let counter = 0
 export const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}${(counter++).toString(36)}`
 
@@ -372,8 +375,22 @@ export class SceneStore {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN || this.status !== "live") return
     for (const p of this.pending) {
       if (p.sent) continue
-      this.ws.send(JSON.stringify({ t: "op", cid: p.cid, op: p.op }))
       p.sent = true
+      const frame = JSON.stringify({ t: "op", cid: p.cid, op: p.op })
+      // The server caps live messages (64 KB, see deploy/start.sh) to keep the socket cheap;
+      // a bigger edit (a long note, a large paste) goes over HTTP instead. The server still
+      // broadcasts the result to everyone, and its reply acknowledges it here directly.
+      if (new TextEncoder().encode(frame).length > LIVE_FRAME_LIMIT) void this.sendOverHttp(p)
+      else this.ws.send(frame)
+    }
+  }
+
+  private async sendOverHttp(p: Pending) {
+    try {
+      const msg = await api<ServerMsg>(`/api/spaces/${this.spaceId}/ops`, { json: { op: { ...p.op, cid: p.cid } } })
+      if (this.pending.some((x) => x.cid === p.cid)) this.receive(msg)
+    } catch (e) {
+      this.receive({ t: "reject", cid: p.cid, error: (e as Error).message, status: (e as { status?: number }).status ?? 0 })
     }
   }
 
@@ -390,6 +407,7 @@ export class SceneStore {
         return
       case "op": {
         const mine = this.pending.findIndex((p) => p.cid === msg.cid)
+        if (mine < 0 && msg.seq <= this.seq) return // already applied (an HTTP-sent edit arrives twice)
         if (mine >= 0) this.pending.splice(mine, 1)
         const busy = new Set(this.pending.flatMap((p) => p.ids))
         for (const c of msg.changes) {

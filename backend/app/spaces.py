@@ -214,7 +214,6 @@ def invite(space_id: str, body: InviteIn, request: Request, user: User = Depends
     token = new_token()
     inv = Invite(space_id=space.id, email=email, role=body.role, token_hash=hash_token(token), invited_by=user.id, expires_at=now() + timedelta(days=14))
     db.add(inv)
-    db.commit()
     link = f"{settings.public_url}/invite/{token}"
     mail.send(
         email,
@@ -222,6 +221,7 @@ def invite(space_id: str, body: InviteIn, request: Request, user: User = Depends
         f"{user.name} ({user.email}) invited you to {'edit' if body.role == 'editor' else 'view'} the board “{space.title}” on Zoomz.",
         ("Open the board", link),
     )
+    db.commit()
     out = {"id": inv.id, "email": email, "role": inv.role}
     if settings.dev and not settings.smtp_host:
         out["devLink"] = link
