@@ -399,13 +399,13 @@
 .zb-head-meta { display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .zb-grip { color: var(--ink-muted); opacity: 0.7; }
 .zb-inner-title { font: 800 17px/1 var(--zb-disp); letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* far away the title is counter-scaled so a small board still reads as a label */
+/* far away the title becomes a small chip above the board, at its normal size (it zooms with the board) */
 .zb-board.zb-far { overflow: visible; }
 .zb-board.zb-far .zb-inner-floor { overflow: hidden; }
 .zb-board.zb-far .zb-head-meta { display: none; }
 .zb-board.zb-far .zb-inner-head { top: auto; bottom: 100%; height: auto; padding: 0 0 6px; overflow: visible; }
 .zb-board.zb-far .zb-inner-title {
-  font-size: clamp(17px, calc(13px / var(--s, 1)), 90px);
+  font-size: 17px;
   overflow: visible;
   /* a small chip so the label reads over any scenery */
   background: var(--surface);
@@ -955,10 +955,10 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
 .zb-map-tab:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .zb-minimap-panel, .zb-map-tab { transition: none; } }
 @media (max-width: 720px) { .zb-map-tab { display: none; } }
-/* Seen from afar the label is counter-scaled to stay readable; so is its editor. */
-.zb-board.zb-far .zb-label-edit { flex-direction: column; gap: calc(4px / var(--s, 1)); }
-.zb-board.zb-far .zb-label-edit input.zb-inner-title { font-size: clamp(17px, calc(13px / var(--s, 1)), 90px); padding: 0.2em 0.45em; border-radius: 0.4em; min-width: calc(220px / var(--s, 1)); }
-.zb-board.zb-far .zb-label-edit input.zb-inner-caption { font-size: clamp(11px, calc(10px / var(--s, 1)), 60px); padding: 0.25em 0.6em; border-radius: 0.5em; min-width: calc(220px / var(--s, 1)); }
+/* Seen from afar the label sits above the board; so does its editor. */
+.zb-board.zb-far .zb-label-edit { flex-direction: column; gap: 4px; }
+.zb-board.zb-far .zb-label-edit input.zb-inner-title { font-size: 17px; padding: 0.2em 0.45em; border-radius: 0.4em; min-width: 220px; }
+.zb-board.zb-far .zb-label-edit input.zb-inner-caption { font-size: 11px; padding: 0.25em 0.6em; border-radius: 0.5em; min-width: 220px; }
 
 /* ---------- arrow styles: the toolbar's arrow menu and the bar over a selected arrow ---------- */
 .zb-tool.is-open { background: var(--surface-sunk); color: var(--cobalt); }
