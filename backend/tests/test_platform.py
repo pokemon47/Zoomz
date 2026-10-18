@@ -752,3 +752,16 @@ def test_note_and_board_colours(make_client):
     assert op(c, sid, {"type": "update", "id": nid, "patch": {"content": {"color": "plaid"}}}).status_code == 400
     nodes = {n["id"]: n for n in scene(c, sid)["nodes"]}
     assert nodes[nid]["content"]["color"] == "mint" and nodes[bid]["content"].get("color") is None
+
+
+def test_board_and_note_fills(make_client):
+    c = make_client("fills@example.com")
+    sid = first_space(c)["id"]
+    root = scene(c, sid)["rootBoardId"]
+    bid, nid = uid("board"), uid("note")
+    assert op(c, sid, {"type": "create", "node": {"id": bid, "type": "board", "parentId": root, "content": {"title": "B", "color": "mint", "fill": "outline"}}}).status_code == 200
+    assert op(c, sid, {"type": "update", "id": bid, "patch": {"content": {"fill": "glass", "color": None}}}).status_code == 200
+    assert op(c, sid, {"type": "update", "id": bid, "patch": {"content": {"fill": "clear"}}}).status_code == 200
+    assert op(c, sid, {"type": "create", "node": {"id": nid, "type": "note", "parentId": root, "content": {"title": "", "body": "x", "fill": "glass"}}}).status_code == 200
+    assert op(c, sid, {"type": "update", "id": nid, "patch": {"content": {"fill": "outline"}}}).status_code == 400
+    assert op(c, sid, {"type": "update", "id": bid, "patch": {"content": {"fill": "neon"}}}).status_code == 400

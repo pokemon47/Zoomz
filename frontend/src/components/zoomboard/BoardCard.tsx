@@ -1,7 +1,7 @@
 import { motion } from "motion/react"
 import { GripHorizontal } from "lucide-react"
 import { memo, useEffect, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent } from "react"
-import { colorById } from "@/lib/colors"
+import type { BoardLook } from "@/lib/fills"
 import { MOTION, STACK } from "@/lib/constants"
 import type { LOD } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -16,8 +16,8 @@ export type BoardCardProps = {
   selected?: boolean
   tactile: Tactile
   reduced: boolean
-  /** Floor colour of the level inside. */
-  innerFloor: string
+  /** Its fill: the surface (also the floor inside), rim and stack colours (lib/fills). */
+  look: BoardLook
   /** Inner floor dot grid: pitch and origin in this card's local px, so it lines up with the floor you land on. */
   innerDot: { pitch: number; ox: number; oy: number }
   /** Something is being dragged over this board and would land in it. */
@@ -26,8 +26,6 @@ export type BoardCardProps = {
   editable?: boolean
   /** Being edited in place: which field has the caret. */
   editing?: BoardField | null
-  /** One of the card colours (lib/colors): the board's rim, label and the stack under it. */
-  color?: string | null
   /** Editing finished: the new title and description. */
   onDone?(next: { title: string; description: string }): void
 }
@@ -52,11 +50,13 @@ function StackLayer({ index, fanned, colour }: { index: 0 | 1; fanned: boolean; 
  * level inside, and its contents are drawn on it by the space. The stack underneath
  * shows there is depth to fall into. Grab the title strip to move the whole board.
  */
-export const BoardCard = memo(function BoardCard({ title, description, count, lod, selected, tactile, reduced, innerFloor, innerDot, dropTarget, editable, editing, onDone, color }: BoardCardProps) {
+export const BoardCard = memo(function BoardCard({ title, description, count, lod, selected, tactile, reduced, look, innerDot, dropTarget, editable, editing, onDone }: BoardCardProps) {
   const fanned = !reduced && (tactile === "hover" || tactile === "drag")
-  const c = colorById(color)
+  const c = look.color
+  const vars = { ["--surface-c" as string]: look.surface } as Record<string, string>
+  if (c && look.rim && look.layer) Object.assign(vars, { ["--tint"]: look.layer, ["--tint-rim"]: look.rim, ["--tint-side"]: c.side, ["--tint-ink"]: c.ink })
   return (
-    <div className={cn("zb-board-wrap", c && "is-tinted")} style={c ? ({ ["--tint" as string]: c.face, ["--tint-side" as string]: c.side, ["--tint-ink" as string]: c.ink } as CSSProperties) : undefined}>
+    <div className={cn("zb-board-wrap", `is-${look.fill}`, c && "is-tinted")} style={vars as CSSProperties}>
       <StackLayer index={1} fanned={fanned} colour="zb-mint" />
       <StackLayer index={0} fanned={fanned} colour="zb-lilac" />
       <div
@@ -72,7 +72,7 @@ export const BoardCard = memo(function BoardCard({ title, description, count, lo
           className="zb-inner-floor"
           aria-hidden
           style={{
-            ["--floor-c" as string]: innerFloor,
+            ["--floor-c" as string]: "var(--surface-c)",
             ["--dot" as string]: `${innerDot.pitch}px`,
             backgroundPosition: `${innerDot.ox}px ${innerDot.oy}px`,
           }}

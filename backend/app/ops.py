@@ -27,11 +27,11 @@ MAX_BATCH = 500
 
 # Content fields each node type may carry, with max string length.
 CONTENT_FIELDS: dict[str, dict[str, int]] = {
-    "board": {"title": 120, "description": 600, "color": 16},
+    "board": {"title": 120, "description": 600, "color": 16, "fill": 10},
     "image": {"title": 160, "alt": 600, "fileId": 32, "src": 300},
     # Notes have no practical length limit (the text shrinks to fit the note); this cap only
     # stops abuse — about 15,000 words.
-    "note": {"title": 120, "body": 100_000, "color": 16},
+    "note": {"title": 120, "body": 100_000, "color": 16, "fill": 10},
     "file": {"title": 255, "fileId": 32},
     "link": {"url": 2000, "title": 300, "description": 600, "image": 2000, "site": 120, "embed": 2000},
     # An arrow between two points of its board; either end may be attached to another item
@@ -40,6 +40,9 @@ CONTENT_FIELDS: dict[str, dict[str, int]] = {
 }
 #: Colours a note or board can take (unset = its usual look).
 CARD_COLORS = {"lemon", "white", "graphite", "tomato", "peach", "mint", "sky", "lilac", "pink"}
+#: How a coloured card is filled. Boards: just an outline in the colour, the colour in full (with
+#: a pastel surface), frosted glass, or clear. Notes: full colour or glass.
+FILLS = {"board": {"outline", "full", "glass", "clear"}, "note": {"full", "glass"}}
 #: Allowed values for arrow styles (unset = straight, solid, pointing at the end).
 ARROW_STYLES = {"shape": {"straight", "curved", "elbow"}, "line": {"solid", "dotted"}, "heads": {"end", "start", "both", "none"}}
 #: Numeric content fields: arrow end points, relative to the arrow's own x/y, in board units.
@@ -138,6 +141,8 @@ def _clean_content(type_: str, content: Any, partial: bool) -> dict[str, Any]:
         out.setdefault("frame", dict(DEFAULT_FRAME))
     if out.get("color") is not None and out["color"] not in CARD_COLORS:
         raise OpError("unknown colour")
+    if out.get("fill") is not None and out["fill"] not in FILLS.get(type_, set()):
+        raise OpError(f"a {type_} can't be filled like that")
     if type_ == "arrow":
         for k, allowed_values in ARROW_STYLES.items():
             if out.get(k) is not None and out[k] not in allowed_values:

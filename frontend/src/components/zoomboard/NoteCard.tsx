@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent } from "react"
-import { colorById } from "@/lib/colors"
+import type { CardColor } from "@/lib/colors"
+import type { NoteFill } from "@/lib/fills"
 import { fitFontSize, useFontsVersion } from "@/lib/fitText"
 import type { LOD } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -19,8 +20,8 @@ export type NoteCardProps = {
   reduced: boolean
   /** Being edited in place: which field has the caret. */
   editing?: NoteField | null
-  /** One of the card colours (lib/colors); unset = lemon. */
-  color?: string | null
+  /** Its colour, or glass (lib/fills). */
+  look?: { fill: NoteFill; color: CardColor }
   /** Editing finished: the new text (unchanged fields included). */
   onDone?(next: { title: string; body: string }): void
 }
@@ -35,16 +36,17 @@ const PAD_BOTTOM = 16
  * the note — a few words are big and bold, a long note is set small — at every zoom level.
  * Click the text to edit it right there.
  */
-export const NoteCard = memo(function NoteCard({ title, body, w, h, lod, selected, tactile, reduced, editing, onDone, color }: NoteCardProps) {
+export const NoteCard = memo(function NoteCard({ title, body, w, h, lod, selected, tactile, reduced, editing, onDone, look }: NoteCardProps) {
   useFontsVersion()
   const editingNow = !!editing && !!onDone
-  const c = colorById(color)
+  const glass = look?.fill === "glass"
+  const c = !glass && look && look.color.id !== "lemon" ? look.color : undefined
   return (
     <TactileSlab
       tactile={editingNow ? "rest" : tactile}
       reduced={reduced}
       baseRotate={-2}
-      className={cn("zb-note", `zb-${lod}`, selected && "is-selected", editingNow && "is-editing", c && `is-${c.id}`)}
+      className={cn("zb-note", `zb-${lod}`, selected && "is-selected", editingNow && "is-editing", c && `is-${c.id}`, glass && "is-glass")}
       style={c ? ({ ["--face" as string]: c.face, ["--side" as string]: c.side, color: c.ink } as CSSProperties) : undefined}
       aria-label={`Note: ${title}`}
     >

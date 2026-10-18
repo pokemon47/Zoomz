@@ -6,11 +6,15 @@ import { DEFAULT_ARROW } from "@/lib/arrows"
 import { colorById } from "@/lib/colors"
 import type { ArrowStyle } from "@/lib/types"
 import { ArrowGlyph, ArrowStyleControls } from "./ArrowStyle"
-import { ColorSwatches } from "./ColorSwatches"
+import { FillPicker } from "./FillPicker"
+import { boardLook, type Look } from "@/lib/fills"
 
 export type ToolKind = "note" | "board" | "arrow"
 /** What a new item looks like: an arrow's style, or a note's / board's colour. */
-export type ToolLook = { arrow: ArrowStyle; note: string | null; board: string | null }
+export type ToolLook = { arrow: ArrowStyle; note: Look; board: Look }
+
+const DEFAULT_NOTE: Look = { fill: "full", color: null }
+const DEFAULT_BOARD: Look = { fill: "plain", color: null }
 
 type Props = {
   /** Put a new item down: at a screen point (client px) when dropped, else in the middle of the view. */
@@ -41,9 +45,18 @@ export function lastLook(): ToolLook {
   } catch {
     /* keep the default */
   }
-  const note = read(LOOK_KEY.note)
-  const board = read(LOOK_KEY.board)
-  return { arrow, note: colorById(note) ? note : null, board: colorById(board) ? board : null }
+  const look = (k: string, fallback: Look): Look => {
+    const v = read(k)
+    if (!v) return fallback
+    if (colorById(v)) return { fill: "full", color: v } // older saved choice: just a colour
+    try {
+      const l = JSON.parse(v) as Look
+      return typeof l.fill === "string" ? { fill: l.fill, color: colorById(l.color) ? l.color : null } : fallback
+    } catch {
+      return fallback
+    }
+  }
+  return { arrow, note: look(LOOK_KEY.note, DEFAULT_NOTE), board: look(LOOK_KEY.board, DEFAULT_BOARD) }
 }
 
 /**
@@ -64,8 +77,7 @@ export function Toolbar({ onPlace, onFiles }: Props) {
   const choose = <K extends ToolKind>(kind: K, value: ToolLook[K]) => {
     setLook((l) => ({ ...l, [kind]: value }))
     try {
-      if (value === null) localStorage.removeItem(LOOK_KEY[kind])
-      else localStorage.setItem(LOOK_KEY[kind], typeof value === "string" ? value : JSON.stringify(value))
+      localStorage.setItem(LOOK_KEY[kind], JSON.stringify(value))
     } catch {
       /* private mode */
     }
@@ -145,12 +157,14 @@ export function Toolbar({ onPlace, onFiles }: Props) {
 
   const icon = (kind: ToolKind) => {
     if (kind === "arrow") return <ArrowGlyph style={look.arrow} width={24} height={16} strokeWidth={2} headFactor={2.4} />
-    const c = colorById(look[kind])
+    const l = look[kind]
+    const c = colorById(l.color)
     const Icon = kind === "note" ? StickyNote : LayoutGrid
+    const dot = l.fill === "glass" || l.fill === "clear" ? l.fill : c && !(kind === "note" && c.id === "lemon") ? "color" : null
     return (
       <span className="zb-tool-icon">
         <Icon strokeWidth={2.25} />
-        {c && <i className="zb-tool-dot" style={{ background: c.face, boxShadow: `0 0 0 1.5px ${c.side}` }} />}
+        {dot && <i className={`zb-tool-dot is-${dot}${l.fill === "outline" ? " is-outline" : ""}`} style={c ? ({ ["--c" as string]: c.face, ["--c-side" as string]: c.side } as CSSProperties) : undefined} />}
       </span>
     )
   }
@@ -215,7 +229,7 @@ export function Toolbar({ onPlace, onFiles }: Props) {
               {open === "arrow" ? (
                 <ArrowStyleControls value={look.arrow} onChange={(s) => choose("arrow", s)} />
               ) : (
-                <ColorSwatches value={look[open] ?? (open === "note" ? "lemon" : null)} plain={open === "board"} onChange={(c) => choose(open, c === "lemon" && open === "note" ? null : c)} />
+                <FillPicker kind={open} value={look[open]} onChange={(l) => choose(open, l)} />
               )}
               <button
                 type="button"
@@ -231,7 +245,7 @@ export function Toolbar({ onPlace, onFiles }: Props) {
           )}
       </div>
       {ghost && (
-        <div className={`zb-tool-ghost is-${ghost.kind}`} style={{ left: ghost.x, top: ghost.y, ...lookStyle(ghost.kind, look) }} aria-hidden>
+        <div className={`zb-tool-ghost is-${ghost.kind}${ghost.kind !== "arrow" ? ` is-${look[ghost.kind].fill}` : ""}`} style={{ left: ghost.x, top: ghost.y, ...lookStyle(ghost.kind, look) }} aria-hidden>
           {ghost.kind === "arrow" ? <ArrowGlyph style={look.arrow} width={120} height={40} strokeWidth={3} /> : null}
         </div>
       )}
@@ -242,12 +256,20 @@ export function Toolbar({ onPlace, onFiles }: Props) {
 /** Colours for the ghost / preview of a note or board. */
 function lookStyle(kind: ToolKind, look: ToolLook): CSSProperties {
   if (kind === "arrow") return {}
-  const c = colorById(look[kind])
-  if (!c) return {}
-  return kind === "note" ? { background: c.face, boxShadow: `0 5px 0 0 ${c.side}, 0 16px 24px -10px rgba(0, 0, 0, 0.3)` } : { boxShadow: `inset 0 0 0 4px ${c.face}, 6px 7px 0 0 ${c.face}, 12px 14px 0 0 ${c.side}, 0 18px 26px -12px rgba(0, 0, 0, 0.3)` }
+  const l = look[kind]
+  if (l.fill === "glass" || l.fill === "clear") return {}
+  if (kind === "note") {
+    const c = colorById(l.color)
+    return c ? { background: c.face, boxShadow: `0 5px 0 0 ${c.side}, 0 16px 24px -10px rgba(0, 0, 0, 0.3)` } : {}
+  }
+  const b = boardLook(l)
+  return b.rim && b.layer
+    ? { background: b.surface, boxShadow: `inset 0 0 0 4px ${b.rim}, 6px 7px 0 0 ${b.layer}, 12px 14px 0 0 ${b.color!.side}, 0 18px 26px -12px rgba(0, 0, 0, 0.3)` }
+    : { background: b.surface }
 }
 
 function Preview({ kind, look }: { kind: ToolKind; look: ToolLook }) {
   if (kind === "arrow") return <ArrowGlyph style={look.arrow} width={64} height={26} strokeWidth={2.5} />
-  return <span className={`zb-tool-preview is-${kind}`} style={lookStyle(kind, look)} />
+  const l = look[kind]
+  return <span className={`zb-tool-preview is-${kind} is-${l.fill}`} style={lookStyle(kind, look)} />
 }

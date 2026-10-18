@@ -1,9 +1,10 @@
 import { ArrowDownToLine, ArrowUpToLine, ChevronDown, ChevronRight, ChevronUp, Download, Layers, Palette, Pencil, Trash2 } from "lucide-react"
-import { ColorSwatches } from "@/components/zoomboard/ColorSwatches"
+import { FillPicker } from "@/components/zoomboard/FillPicker"
+import type { Look } from "@/lib/fills"
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import type { LayerMove } from "@/lib/layers"
 
-export type ContextAction = { kind: "edit" } | { kind: "delete" } | { kind: "export" } | { kind: "layer"; move: LayerMove } | { kind: "color"; color: string | null }
+export type ContextAction = { kind: "edit" } | { kind: "delete" } | { kind: "export" } | { kind: "layer"; move: LayerMove } | { kind: "fill"; look: Look }
 
 type Props = {
   x: number
@@ -15,7 +16,7 @@ type Props = {
   /** Which layer moves would change anything (front/forward disabled when already on top…). */
   layerable: Record<LayerMove, boolean>
   /** Notes and boards: their colour now (boards may have none). */
-  colorable?: { value: string | null; plain: boolean }
+  colorable?: { kind: "note" | "board"; value: Look }
   /** Offer "Export as zip" (boards, when saved on the server). */
   exportable?: boolean
   onAction(a: ContextAction): void
@@ -146,7 +147,7 @@ export function ContextMenu({ x, y, title, canEdit, canRename = true, layerable,
           <span className="zb-ctx-label">
             <Palette aria-hidden /> Colour
           </span>
-          <ColorSwatches value={colorable.value} plain={colorable.plain} size={22} onChange={(color) => act({ kind: "color", color })} />
+          <FillPicker kind={colorable.kind} value={colorable.value} size={22} onChange={(look) => act({ kind: "fill", look })} />
         </div>
       )}
       {exportable && <Item icon={<Download />} label="Export as zip" onClick={() => act({ kind: "export" })} />}

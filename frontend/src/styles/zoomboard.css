@@ -377,8 +377,8 @@
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background-color: color-mix(in srgb, var(--floor-c) calc(var(--face-alpha, 1) * 100%), transparent);
-  /* dot radius scales with the pitch so the inner floor matches the floor you land on */
+  background-color: var(--floor-c);
+  /* one dot grid everywhere (see SpaceCanvas): same size and place on every floor and board face */
   background-image: radial-gradient(color-mix(in srgb, var(--canvas-dot) calc(var(--dot-o, 1) * 100%), transparent) calc(var(--dot) * 0.067), transparent calc(var(--dot) * 0.075));
   background-size: var(--dot) var(--dot);
 }
@@ -1014,12 +1014,6 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
 /* ---------- note & board colours ---------- */
 .zb-note.is-graphite::before { background: rgba(255, 255, 255, 0.22); }
 .zb-note.is-graphite .zb-note-empty, .zb-note.is-graphite .zb-note-edit ::placeholder { color: rgba(247, 242, 234, 0.45); }
-/* A coloured board: the stack under it and a rim around its face take the colour; the face itself
-   stays the floor you step onto, so walking into it still looks seamless. */
-.zb-board-wrap.is-tinted .zb-layer { background: var(--tint); --side: var(--tint-side); }
-.zb-board-wrap.is-tinted .zb-layer.zb-lilac { filter: brightness(1.06); }
-.zb-board-wrap.is-tinted .zb-board { box-shadow: 0 8px 0 0 var(--tint-side), inset 0 0 0 calc(5px / max(var(--s, 1), 0.2)) var(--tint); }
-.zb-board-wrap.is-tinted .zb-board.zb-far .zb-inner-title { background: var(--tint); color: var(--tint-ink); box-shadow: 0 0.12em 0 0 var(--tint-side); }
 .zb-colors { display: grid; grid-template-columns: repeat(5, auto); gap: 6px; justify-content: start; }
 .zb-color { border: 0; padding: 0; border-radius: 50%; cursor: pointer; display: grid; place-items: center; color: var(--ink-muted); background: var(--surface-sunk); transition: transform 180ms var(--zb-spring); }
 .zb-color:hover { transform: scale(1.12); }
@@ -1040,7 +1034,7 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
 .zb-share-btn:hover { transform: translateY(-1px); }
 .zb-share-btn:active { transform: translateY(2px); }
 .zb-share-btn:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 3px; }
-.zb-status.is-icon { width: 36px; height: 36px; padding: 0; justify-content: center; border-radius: 50%; color: var(--ink-muted); }
+.zb-status.is-icon { width: 30px; height: 36px; padding: 0; justify-content: center; background: none; box-shadow: none; color: var(--ink-muted); filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25)); }
 .zb-status.is-icon.is-live { color: var(--ink-muted); }
 .zb-pulse-icon { animation: zb-pulse 1.1s ease-in-out infinite; }
 @keyframes zb-pulse { 50% { opacity: 0.45; } }
@@ -1056,3 +1050,61 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
 .zb-topbar-mid .zb-board-title { flex: 0 3 auto; min-width: 64px; }
 .zb-path-slot { flex: 0 1 auto; }
 .zb-crumbs.is-inline { flex: 0 1 auto; min-width: 110px; }
+
+/* ---------- board fills: plain, outline, full, glass, clear ---------- */
+:root { --glass: rgba(255, 255, 255, 0.16); --glass-edge: rgba(255, 255, 255, 0.55); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --glass: rgba(255, 255, 255, 0.07); --glass-edge: rgba(255, 255, 255, 0.22); } }
+:root[data-theme="dark"] { --glass: rgba(255, 255, 255, 0.07); --glass-edge: rgba(255, 255, 255, 0.22); }
+/* Outline and full: the stack under the board and a rim round its face take the colour. */
+.zb-board-wrap.is-tinted .zb-layer { background: var(--tint); --side: var(--tint-side); }
+.zb-board-wrap.is-tinted .zb-layer.zb-lilac { filter: brightness(1.08); }
+.zb-board-wrap.is-tinted .zb-board { box-shadow: 0 8px 0 0 var(--tint-side), inset 0 0 0 calc(5px / max(var(--s, 1), 0.2)) var(--tint-rim); }
+.zb-board-wrap.is-tinted .zb-board.zb-far .zb-inner-title { background: var(--tint-rim); color: #fff; box-shadow: 0 0.12em 0 0 var(--tint-side); }
+.zb-board-wrap.is-outline .zb-board.zb-far .zb-inner-title { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 0.12em var(--tint-rim); }
+/* Glass: frosted, catching the light along its edges; whatever is behind shows through, blurred. */
+.zb-board-wrap.is-glass .zb-inner-floor, .zb-room.is-glass {
+  background-color: var(--glass);
+  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 42%, rgba(255, 255, 255, 0) 70%, rgba(255, 255, 255, 0.12)),
+    radial-gradient(color-mix(in srgb, var(--ink) 20%, transparent) calc(var(--dot) * 0.067), transparent calc(var(--dot) * 0.075));
+  background-size: 100% 100%, var(--dot) var(--dot);
+  backdrop-filter: blur(16px) saturate(1.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+}
+.zb-board-wrap.is-glass .zb-board { box-shadow: inset 0 0 0 calc(1.5px / max(var(--s, 1), 0.2)) var(--glass-edge), 0 8px 24px -8px rgba(0, 0, 0, 0.25); }
+.zb-board-wrap.is-glass .zb-layer { background: var(--glass); box-shadow: inset 0 0 0 1px var(--glass-edge); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+/* Clear: nothing but a fine outline, so you can still find and grab it. */
+.zb-board-wrap.is-clear .zb-inner-floor, .zb-room.is-clear { background-color: transparent; }
+.zb-board-wrap.is-clear .zb-board { box-shadow: inset 0 0 0 calc(1.5px / max(var(--s, 1), 0.2)) color-mix(in srgb, var(--ink) 35%, transparent); }
+.zb-board-wrap.is-clear .zb-layer { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 18%, transparent); }
+.zb-board-wrap.is-glass .zb-board.zb-far .zb-inner-title, .zb-board-wrap.is-clear .zb-board.zb-far .zb-inner-title { background: color-mix(in srgb, var(--surface) 82%, transparent); color: var(--ink); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: inset 0 0 0 1px var(--glass-edge); }
+/* See-through surfaces get soft dots, which read on any scenery. */
+.zb-board-wrap.is-clear .zb-inner-floor, .zb-room.is-clear { background-image: radial-gradient(color-mix(in srgb, var(--ink) 22%, transparent) calc(var(--dot) * 0.067), transparent calc(var(--dot) * 0.075)); }
+/* Glass notes. */
+.zb-note.is-glass {
+  --face: var(--glass); --side: var(--glass-edge); color: var(--ink);
+  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0) 45%);
+  backdrop-filter: blur(14px) saturate(1.6); -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  box-shadow: inset 0 0 0 1px var(--glass-edge), 0 10px 24px -10px rgba(0, 0, 0, 0.3);
+}
+.zb-note.is-glass .zb-note-empty, .zb-note.is-glass .zb-note-edit ::placeholder { color: color-mix(in srgb, var(--ink) 45%, transparent); }
+/* ---------- fill picker ---------- */
+.zb-fill { display: flex; flex-direction: column; gap: 8px; }
+.zb-fill-mode { display: flex; gap: 4px; padding: 3px; border-radius: var(--radius-full); background: var(--surface-sunk); align-self: flex-start; }
+.zb-fill-mode .zb-chip { background: none; }
+.zb-fill-mode .zb-chip[aria-checked="true"] { background: var(--surface); box-shadow: 0 2px 0 0 var(--surface-side); }
+.zb-color { background: var(--c); box-shadow: inset 0 -3px 0 var(--c-side); }
+/* Outline mode: the swatch shows a white face with the colour as its ring. */
+.zb-color.is-outline { background: var(--depth-0); box-shadow: inset 0 0 0 4px var(--c); }
+.zb-fill-special { display: flex; gap: 6px; flex-wrap: wrap; }
+.zb-fill-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 6px; border: 0; border-radius: var(--radius-full); background: var(--surface-sunk); color: var(--ink); font: 600 12px/1 var(--zb-sans); cursor: pointer; }
+.zb-fill-chip i { width: 16px; height: 16px; border-radius: 50%; }
+.zb-fill-chip.is-plain i { background: var(--depth-0); box-shadow: inset 0 0 0 1px var(--surface-side); }
+.zb-fill-chip.is-glass i { background: linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(160, 190, 255, 0.35)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8); }
+.zb-fill-chip.is-clear i { background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 45%, transparent); }
+.zb-fill-chip[aria-checked="true"] { outline: 2.5px solid var(--cobalt); outline-offset: 1px; }
+.zb-tool-dot { background: var(--c); box-shadow: 0 0 0 1.5px var(--c-side); }
+.zb-tool-dot.is-outline { background: var(--depth-0); box-shadow: inset 0 0 0 2.5px var(--c); }
+.zb-tool-dot.is-glass { background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(160, 190, 255, 0.5)); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7); }
+.zb-tool-dot.is-clear { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
+.zb-tool-preview.is-glass, .zb-tool-ghost.is-glass { background: var(--glass) !important; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: inset 0 0 0 1px var(--glass-edge), 0 10px 20px -8px rgba(0, 0, 0, 0.3) !important; }
+.zb-tool-preview.is-clear, .zb-tool-ghost.is-clear { background: transparent !important; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 45%, transparent) !important; }

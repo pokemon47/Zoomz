@@ -37,6 +37,7 @@ import { IMPORT_GRID, IMPORT_LIMITS, countFiles, fileCard, planFolder, readDrop,
 import { api, apiUrl } from "@/lib/http"
 import { DEFAULT_BEND, arrowEnds, bendThrough, curveMid, arrowPatch, attachable, distToArrow, isArrow, styleOf, type Box, type Pt } from "@/lib/arrows"
 import { getLabels, saveLabels, type Labels } from "@/lib/labels"
+import { boardLook, noteLook } from "@/lib/fills"
 import { pathTo, titleOf } from "@/lib/scene"
 import { SCENERY, themeById, type SceneryId } from "@/lib/scenery"
 import { layout, lift, localFromScreen, sortByLayer, type Cam, type Layout, type Placed, type Space, type Viewport } from "@/lib/space"
@@ -97,6 +98,8 @@ const capture = (el: Element, id: number) => {
     /* the pointer already went away */
   }
 }
+/** Spacing of the background dots, in screen px, at every zoom level. */
+const DOT_PITCH = 24
 const isUrl = (s: string) => /^https?:\/\/\S+$/i.test(s)
 const isTyping = (t: EventTarget | null) => {
   const el = t as HTMLElement | null
@@ -172,6 +175,7 @@ export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = nul
   const pointerAt = useRef<{ x: number; y: number } | null>(null)
   const touches = useRef(new Map<number, { x: number; y: number }>())
   const pinch = useRef<{ d: number; mx: number; my: number } | null>(null)
+  const dotZoom = useRef({ z: 0, t: performance.now(), pulse: 0 })
 
   const select = useCallback((ids: string[]) => setSelection(ids), [])
   const selected = useMemo(() => new Set(selection), [selection])
@@ -235,35 +239,38 @@ export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = nul
   const hasScenery = !!theme.layer
   const placedById = useMemo(() => new Map(lay.items.map((p) => [p.node.id, p])), [lay.items])
 
-  // The ground under everything, drawn in screen space. The top board is open sky (scenery) or
-  // the studio floor; then one frosted floor for every board you are inside, outermost first.
-  // Drawing the whole stack keeps the picture identical on both sides of a camera re-anchor:
-  // a board's card face and its full-screen floor layer are the same tint at the same alpha.
-  const viewportStyle: CSSProperties = {
-    ["--face-alpha" as string]: hasScenery ? SPACE.faceAlpha : 1,
+  // The dots: one grid in screen space shared by the ground, every floor and every board face,
+  // so the space never looks smaller as you go deeper and stepping into a board is seamless.
+  // They keep one size; zooming gives them a brief push in or out that springs back.
+  const travel0 = engine.travel
+  const tNow = performance.now()
+  const dz = travel0.zoom - dotZoom.current.z
+  const dt = Math.min(64, tNow - dotZoom.current.t)
+  dotZoom.current.z = travel0.zoom
+  dotZoom.current.t = tNow
+  dotZoom.current.pulse = reduced ? 0 : dotZoom.current.pulse * Math.exp(-dt / 140) + dz
+  if (Math.abs(dotZoom.current.pulse) > 0.002) animUntil.current = Math.max(animUntil.current, tNow + 48)
+  else dotZoom.current.pulse = 0
+  const dotScale = Math.exp(Math.max(-0.6, Math.min(0.6, dotZoom.current.pulse)))
+  const pitch = DOT_PITCH * dotScale
+  const mod = (v: number, m: number) => ((v % m) + m) % m
+  // Panning carries the dots along; a zoom pulse scales them about the middle of the view.
+  const lattice = {
+    pitch,
+    ox: vp.w / 2 + mod(-travel0.x - vp.w / 2, DOT_PITCH) * dotScale,
+    oy: vp.h / 2 + mod(-travel0.y - vp.h / 2, DOT_PITCH) * dotScale,
   }
-  const rootCam = space.toFrame(engine.display, space.rootId)
-  const rootPitch = 24 * rootCam.s
-  const groundStyle: CSSProperties | null = hasScenery
-    ? null
-    : {
-        ["--floor-c" as string]: floorFor(0),
-        ["--dot" as string]: `${rootPitch}px`,
-        ["--dot-o" as string]: Math.min(1, Math.max(0, (rootPitch - 6) / 8)),
-        backgroundPosition: `${rootCam.x}px ${rootCam.y}px`,
-      }
+  const dotsStyle = { ["--dot" as string]: `${pitch}px`, backgroundPosition: `${lattice.ox}px ${lattice.oy}px` } as CSSProperties
+
+  // The ground under everything, drawn in screen space: open sky (scenery) or the studio floor;
+  // then, for every board you are inside, its own surface as the floor (outermost first), so a
+  // board you step into becomes a canvas of its own: plain, tinted, glass or clear.
+  const viewportStyle: CSSProperties = {}
+  const groundStyle: CSSProperties | null = hasScenery ? null : { ["--floor-c" as string]: floorFor(0), ...dotsStyle }
   const inside = lay.room ? pathTo(space.index, lay.room.board).slice(1) : []
-  // Three frosted floors are already ~99.6% opaque; deeper ones can't be seen, so skip them.
   const floors = inside.slice(-SPACE.maxFloorLayers).map((b) => {
-    const c = space.toFrame(engine.display, b.id)
-    return {
-      id: b.id,
-      style: {
-        ["--floor-c" as string]: floorFor(space.depthOf(b.id)),
-        ["--dot" as string]: `${24 * c.s}px`,
-        backgroundPosition: `${c.x}px ${c.y}px`,
-      } as CSSProperties,
-    }
+    const look = boardLook(b.content as { color?: string | null; fill?: string | null })
+    return { id: b.id, fill: look.fill, style: { ["--floor-c" as string]: look.surface, ...dotsStyle } as CSSProperties }
   })
 
   const now = performance.now()
@@ -606,11 +613,11 @@ export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = nul
         const w = 220, h = 190, z = 80 + Math.round(Math.random() * 30)
         const ss = screenScaleIn(board, z)
         const at = localFromScreen(c, vp, z, pt.x - (w * ss) / 2, pt.y - (h * ss) / 2, engine.pointer, !reduced)
-        node = { id: newId("note"), type: "note", parentId: board, ...clampInto(board, { w, h }, at.x, at.y), z, w, h, rank, content: { title: "", body: "", ...(look.note ? { color: look.note } : {}) } }
+        node = { id: newId("note"), type: "note", parentId: board, ...clampInto(board, { w, h }, at.x, at.y), z, w, h, rank, content: { title: "", body: "", ...(look.note.fill === "glass" ? { fill: "glass" } : look.note.color ? { color: look.note.color } : {}) } }
       } else {
         const w = 360, h = 330
         const at = localAt(board, pt.x, pt.y)
-        node = { id: newId("board"), type: "board", parentId: board, ...clampInto(board, { w, h }, at.x - w / 2, at.y - h / 2), z: 0, w, h, rank, content: { title: "", description: null, frame: { x: 0, y: 0, w: 1300, h: 1100 }, ...(look.board ? { color: look.board } : {}) } }
+        node = { id: newId("board"), type: "board", parentId: board, ...clampInto(board, { w, h }, at.x - w / 2, at.y - h / 2), z: 0, w, h, rank, content: { title: "", description: null, frame: { x: 0, y: 0, w: 1300, h: 1100 }, ...(look.board.fill !== "plain" ? { fill: look.board.fill, color: look.board.color } : {}) } }
       }
       if (!store.commit({ type: "create", node }, `add ${kind}`)) return
       spawn([node.id])
@@ -771,12 +778,17 @@ export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = nul
       const targets = selection.includes(id) ? selection : [id]
       if (a.kind === "edit") startEdit(n)
       else if (a.kind === "delete") deleteIds(targets)
-      else if (a.kind === "color") {
+      else if (a.kind === "fill") {
         // Every note and board in the selection, as one undoable change.
         const ops = targets
           .map((tid) => space.node(tid))
           .filter((t): t is SceneNode => !!t && (t.type === "note" || t.type === "board") && store.canEdit(t.parentId ?? t.id))
-          .map((t) => ({ type: "update", id: t.id, patch: { content: { color: a.color } } }) as Op)
+          .map((t) => {
+            // Each kind keeps to the fills it has: a note can't be an outline or clear.
+            const fill = t.type === "note" ? (a.look.fill === "glass" ? "glass" : "full") : a.look.fill === "plain" ? null : a.look.fill
+            const color = fill === "glass" || fill === "clear" || fill === null ? null : (a.look.color ?? (t.type === "note" ? "lemon" : null))
+            return { type: "update", id: t.id, patch: { content: { fill, color } } } as Op
+          })
         if (ops.length) store.commit(ops.length === 1 ? ops[0] : { type: "batch", ops }, "colour")
       } else if (a.kind === "export") {
         if (store.spaceId) window.location.assign(apiUrl(`/api/spaces/${store.spaceId}/export?board=${encodeURIComponent(id)}`))
@@ -1399,7 +1411,7 @@ export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = nul
         <Scenery theme={theme} z={travel.zoom * SCENERY.layersPerEFold + 2} panX={-travel.x} panY={-travel.y} pointer={engine.pointer} vp={vp} parallax={!reduced} />
         {groundStyle && <div className="zb-inner-floor zb-room zb-ground" style={groundStyle} aria-hidden />}
         {floors.map((f) => (
-          <div key={f.id} className="zb-inner-floor zb-room" style={f.style} aria-hidden />
+          <div key={f.id} className={`zb-inner-floor zb-room is-${f.fill}`} style={f.style} aria-hidden />
         ))}
         <div className="zb-vignette" aria-hidden />
         {ordered.map((p) => {
@@ -1427,6 +1439,7 @@ export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = nul
             inline={inline?.id === p.node.id ? inline.field : null}
             onInlineDone={finishInline}
             linkTarget={endDrag?.snap === p.node.id}
+            lattice={lattice}
           />
           )
         })}
@@ -1550,7 +1563,9 @@ export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = nul
           canRename={space.node(menu.id)!.type !== "arrow"}
           colorable={(() => {
             const n = space.node(menu.id)!
-            return n.type === "note" || n.type === "board" ? { value: n.content.color ?? (n.type === "note" ? "lemon" : null), plain: n.type === "board" } : undefined
+            if (n.type === "note") return { kind: "note" as const, value: { fill: noteLook(n.content).fill, color: n.content.color ?? "lemon" } }
+            if (n.type === "board") return { kind: "board" as const, value: { fill: boardLook(n.content).fill, color: n.content.color ?? null } }
+            return undefined
           })()}
           layerable={layerable(menu.id)}
           exportable={!!store.spaceId && !store.publicToken && space.node(menu.id)!.type === "board" && !(selection.length > 1 && selection.includes(menu.id))}
@@ -1622,11 +1637,13 @@ type ItemProps = {
   onInlineDone(id: string, next: Record<string, string | null>): void
   /** An arrow end being dragged would attach here. */
   linkTarget: boolean
+  /** The shared dot grid (screen px). */
+  lattice: { pitch: number; ox: number; oy: number }
 }
 
 type CardEdit = { editable: boolean; inline: NoteField | BoardField | null; onDone(next: Record<string, string | null>): void }
 
-function Item({ placed, space, tactile, selected, multi, reduced, dragging, dropTarget, hidden, morph, onKeyDown, onFocusItem, editable, inline, onInlineDone, linkTarget }: ItemProps) {
+function Item({ placed, space, tactile, selected, multi, reduced, dragging, dropTarget, hidden, morph, onKeyDown, onFocusItem, editable, inline, onInlineDone, linkTarget, lattice }: ItemProps) {
   const { node: n, order, reveal, lod } = placed
   let { x, y, scale, opacity } = placed
   if (morph) {
@@ -1668,7 +1685,12 @@ function Item({ placed, space, tactile, selected, multi, reduced, dragging, drop
       onFocus={(e) => e.target === e.currentTarget && onFocusItem(n.id)}
     >
       {n.type !== "board" && n.w * scale < 1600 && <div className="zb-hshadow" aria-hidden />}
-      {renderCard(n, placed, space, tactile, selected && !multi, reduced, lod, dropTarget, n.w * scale, f, { editable, inline, onDone: (next) => onInlineDone(n.id, next) })}
+      {renderCard(n, placed, space, tactile, selected && !multi, reduced, lod, dropTarget, n.w * scale, f, { editable, inline, onDone: (next) => onInlineDone(n.id, next) }, {
+        // The shared dot grid, in this card's own (scaled) pixels.
+        pitch: lattice.pitch / (scale * f),
+        ox: (lattice.ox - x) / (scale * f),
+        oy: (lattice.oy - y) / (scale * f),
+      })}
     </div>
   )
 }
@@ -1682,7 +1704,7 @@ function pick(c: { src: string; thumb_256?: string; thumb_1024?: string }, scree
   return c.src
 }
 
-function renderCard(n: SceneNode, placed: Placed, space: Space, tactile: Tactile, selected: boolean, reduced: boolean, lod: Placed["lod"], dropTarget: boolean, screenW: number, f: number, edit: CardEdit) {
+function renderCard(n: SceneNode, _placed: Placed, space: Space, tactile: Tactile, selected: boolean, reduced: boolean, lod: Placed["lod"], dropTarget: boolean, screenW: number, f: number, edit: CardEdit, dots: { pitch: number; ox: number; oy: number }) {
   const progress = (n.content as { progress?: number; status?: string }).status === "uploading" ? ((n.content as { progress?: number }).progress ?? 0) : undefined
   if (n.type === "image") return <ImageCard title={n.content.title} alt={n.content.alt} src={pick(n.content, screenW)} lod={lod} selected={selected} tactile={tactile} reduced={reduced} progress={progress} />
   if (n.type === "note")
@@ -1698,7 +1720,7 @@ function renderCard(n: SceneNode, placed: Placed, space: Space, tactile: Tactile
         reduced={reduced}
         editing={edit.inline === "title" || edit.inline === "body" ? edit.inline : null}
         onDone={edit.onDone}
-        color={n.content.color}
+        look={noteLook(n.content)}
       />
     )
   if (n.type === "arrow") return null
@@ -1719,7 +1741,6 @@ function renderCard(n: SceneNode, placed: Placed, space: Space, tactile: Tactile
       />
     )
   if (n.type === "link") return <LinkCard {...n.content} lod={lod} selected={selected} tactile={tactile} reduced={reduced} />
-  const io = space.innerOrigin(n.id)
   return (
     <BoardCard
       title={n.content.title}
@@ -1729,11 +1750,10 @@ function renderCard(n: SceneNode, placed: Placed, space: Space, tactile: Tactile
       selected={selected}
       tactile={tactile}
       reduced={reduced}
-      innerFloor={floorFor(placed.level + 1)}
-      innerDot={{ pitch: 24 * io.k, ox: io.ox, oy: io.oy }}
+      look={boardLook(n.content)}
+      innerDot={dots}
       dropTarget={dropTarget}
       editable={edit.editable}
-      color={n.content.color}
       editing={edit.inline === "title" || edit.inline === "description" ? edit.inline : null}
       onDone={(next) => edit.onDone({ title: next.title, description: next.description || null })}
     />

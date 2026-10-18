@@ -1,6 +1,7 @@
 import { Eye } from "lucide-react"
 import { useRef, useState, type PointerEvent } from "react"
 import { DEPTH_DOT, floorFor } from "@/lib/constants"
+import { boardLook } from "@/lib/fills"
 import { arrowEnds, curveControl, elbowCorner, styleOf } from "@/lib/arrows"
 import { fileKind } from "@/lib/files"
 import { titleOf } from "@/lib/scene"
@@ -119,14 +120,17 @@ export function Minimap({ space, focus, cam, vp, onCenter, onHide }: Props) {
           {kids.map((n) => {
             const p = space.at(n)
             const r = Math.min(n.w, n.h) * 0.08
-            if (n.type === "board")
+            if (n.type === "board") {
+              const look = boardLook(n.content)
+              const see = look.fill === "glass" || look.fill === "clear"
               return (
-                <g key={n.id}>
-                  <rect x={p.x + n.w * 0.06} y={p.y + n.h * 0.08} width={n.w} height={n.h} rx={r * 1.5} fill="var(--mint)" />
-                  <rect x={p.x + n.w * 0.03} y={p.y + n.h * 0.04} width={n.w} height={n.h} rx={r * 1.5} fill="var(--lilac)" />
-                  <rect x={p.x} y={p.y} width={n.w} height={n.h} rx={r * 1.5} fill={floorFor(depth + 1)} stroke="var(--surface-side)" strokeWidth={n.w * 0.02} />
+                <g key={n.id} opacity={see ? 0.75 : 1}>
+                  {!see && <rect x={p.x + n.w * 0.06} y={p.y + n.h * 0.08} width={n.w} height={n.h} rx={r * 1.5} fill={look.color ? look.color.side : "var(--mint)"} />}
+                  {!see && <rect x={p.x + n.w * 0.03} y={p.y + n.h * 0.04} width={n.w} height={n.h} rx={r * 1.5} fill={look.layer ?? "var(--lilac)"} />}
+                  <rect x={p.x} y={p.y} width={n.w} height={n.h} rx={r * 1.5} fill={look.fill === "glass" ? "var(--glass)" : look.surface} stroke={look.rim ?? (see ? "var(--ink-muted)" : "var(--surface-side)")} strokeWidth={n.w * (look.rim ? 0.04 : 0.02)} />
                 </g>
               )
+            }
             if (n.type === "image")
               return <image key={n.id} href={n.content.src} x={p.x} y={p.y} width={n.w} height={n.h} preserveAspectRatio="xMidYMid slice" />
             if (n.type === "note") return <rect key={n.id} x={p.x} y={p.y} width={n.w} height={n.h} rx={r} fill="var(--lemon)" />
