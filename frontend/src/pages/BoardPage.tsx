@@ -83,6 +83,7 @@ function LiveBoard({ store }: { store: SceneStore }) {
   const controller = useRef<CanvasController | null>(null)
   const [follow, setFollow] = useState<string | null>(null)
   const [sharing, setSharing] = useState(false)
+  const [crumbsEl, setCrumbsEl] = useState<HTMLSpanElement | null>(null)
   const [searching, setSearching] = useState(false)
   const [localScenery, setLocalScenery] = useState<SceneryId | null>(readScenery)
   const version = useSyncExternalStore(
@@ -172,6 +173,7 @@ function LiveBoard({ store }: { store: SceneStore }) {
         onToast={toast}
         controller={controller}
         status={<Status store={store} />}
+        crumbsTarget={crumbsEl}
       />
       <TopBar
         onSearch={() => setSearching(true)}
@@ -190,6 +192,7 @@ function LiveBoard({ store }: { store: SceneStore }) {
         ) : (
           <TitleField value={store.title} editable={canEditSpace && !!user} onSave={rename} />
         )}
+        <span ref={setCrumbsEl} className="zb-path-slot" />
         <div className="zb-people-row" aria-label="People here">
           {[...people.values()].map((p) => (
             <button

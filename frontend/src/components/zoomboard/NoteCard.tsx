@@ -132,7 +132,7 @@ function NoteEditor({ title, body, w, h, field, onDone }: { title: string; body:
   }
 
   return (
-    <div className="zb-note-text zb-note-edit" style={{ fontSize: size }} onBlur={onBlur} data-no-drag>
+    <div className="zb-note-text zb-note-edit" style={{ fontSize: size }} onBlur={onBlur} data-editor>
       <input
         ref={titleRef}
         className="zb-note-title"

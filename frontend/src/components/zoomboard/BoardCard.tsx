@@ -160,7 +160,7 @@ function BoardLabelEditor({ title, description, field, showDescription, onDone }
     }
   }
   return (
-    <span className="zb-inner-titles zb-label-edit" onBlur={onBlur} data-no-drag>
+    <span className="zb-inner-titles zb-label-edit" onBlur={onBlur} data-editor>
       <input ref={titleRef} className="zb-inner-title" value={t} maxLength={120} placeholder="Untitled board" aria-label="Board title" onChange={(e) => setT(e.target.value)} onKeyDown={onKey(showDescription ? focusDescription : undefined)} />
       {showDescription && (
         <input ref={descRef} className="zb-inner-caption" value={d} maxLength={600} placeholder="Add a description" aria-label="Board description" onChange={(e) => setD(e.target.value)} onKeyDown={onKey()} />

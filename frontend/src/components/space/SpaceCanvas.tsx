@@ -17,6 +17,7 @@ import {
   type ReactNode,
 } from "react"
 import { Eye, EyeOff } from "lucide-react"
+import { createPortal } from "react-dom"
 import { BoardCard, type BoardField } from "@/components/zoomboard/BoardCard"
 import { Breadcrumbs } from "@/components/zoomboard/Breadcrumbs"
 import { DraggablePanel } from "@/components/zoomboard/DraggablePanel"
@@ -66,13 +67,15 @@ type Props = {
   controller?: MutableRefObject<CanvasController | null>
   /** Shown beside the path (the save status). */
   status?: ReactNode
+  /** Where in the header the path (and status) go, right after the canvas title. */
+  crumbsTarget?: HTMLElement | null
 }
 
 type Grab = { id: string; parent: string; x: number; y: number; sx: number; sy: number; ss: number }
 type Press =
   | { kind: "pan"; pointer: number; lx: number; ly: number; moved: boolean }
   | { kind: "marquee"; pointer: number; sx: number; sy: number; x: number; y: number }
-  | { kind: "items"; pointer: number; sx: number; sy: number; primary: string; fx: number; fy: number; grabs: Grab[]; moved: boolean; additive: boolean; edit: string | null }
+  | { kind: "items"; pointer: number; sx: number; sy: number; primary: string; fx: number; fy: number; grabs: Grab[]; moved: boolean; additive: boolean; edit: string | null; fromEditor?: boolean }
   | { kind: "arrowEnd"; pointer: number; id: string; end: 1 | 2; at: Pt; snap: string | null; moved: boolean }
   | { kind: "arrowBend"; pointer: number; id: string; bend: number; moved: boolean }
   | { kind: "resize"; pointer: number; sx: number; sy: number; id: string; w: number; h: number; scale: number; keepAspect: boolean; orig: SceneNode }
@@ -100,7 +103,7 @@ const isTyping = (t: EventTarget | null) => {
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)
 }
 
-export function SpaceCanvas({ store, scenery, status, follow = null, onStopFollow, onToast, controller }: Props) {
+export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = null, onStopFollow, onToast, controller }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const reduced = useReducedMotion() ?? false
   const space = store.space
@@ -880,8 +883,11 @@ export function SpaceCanvas({ store, scenery, status, follow = null, onStopFollo
     if (e.button !== 0 && e.button !== 1) return
     const target = e.target as HTMLElement
     if (target.closest("[data-no-drag]")) return
+    // Pressing in text being edited places the caret as usual; if you then drag, the card moves
+    // (the edit is saved) instead of the press being swallowed by the text field.
+    const inEditor = !!target.closest("[data-editor]")
     onStopFollow?.()
-    capture(e.currentTarget, e.pointerId)
+    if (!inEditor) capture(e.currentTarget, e.pointerId)
     engine.stop()
     const pt = local(e)
 
@@ -922,6 +928,7 @@ export function SpaceCanvas({ store, scenery, status, follow = null, onStopFollo
     // A board is a place: press its floor to pan, grab its title strip (or a small board) to move it.
     const grabbable =
       placed && e.button === 0 && (placed.node.type !== "board" || target.closest("[data-board-handle]") || placed.node.w * placed.scale < 260)
+    if (inEditor && !grabbable) return
 
     if (!grabbable) {
       if (e.shiftKey && e.button === 0) {
@@ -962,6 +969,7 @@ export function SpaceCanvas({ store, scenery, status, follow = null, onStopFollo
       additive,
       // Pressed on a note's text or a board's title / description: a click edits it.
       edit: target.closest<HTMLElement>("[data-edit]")?.dataset.edit ?? null,
+      fromEditor: inEditor,
     }
     pressRef.current = next
     setPress(next)
@@ -985,6 +993,9 @@ export function SpaceCanvas({ store, scenery, status, follow = null, onStopFollo
     pointerAt.current = pt
     engine.setPointer({ x: (pt.x / vp.w - 0.5) * 2, y: (pt.y / vp.h - 0.5) * 2 })
     const p = pressRef.current
+    // The button was let go somewhere we never heard about (outside the window, or while the
+    // app lost focus): finish the press now rather than leaving the card stuck to the pointer.
+    if (p && p.pointer === e.pointerId && e.pointerType === "mouse" && e.buttons === 0) return endPress(e)
     if (!p || p.pointer !== e.pointerId) {
       if (e.pointerType === "mouse") {
         const el = (e.target as HTMLElement).closest<HTMLElement>("[data-item]")
@@ -1050,6 +1061,12 @@ export function SpaceCanvas({ store, scenery, status, follow = null, onStopFollo
     }
     // dragging cards
     if (!p.moved && Math.hypot(e.clientX - p.sx, e.clientY - p.sy) < MOTION.dragThreshold) return
+    if (!p.moved && p.fromEditor) {
+      // Leaving the text: save it, drop any text selection, and take over the pointer.
+      ;(document.activeElement as HTMLElement | null)?.blur()
+      window.getSelection()?.removeAllRanges()
+      capture(e.currentTarget, e.pointerId)
+    }
     if (!p.grabs.length || !p.grabs.every((g) => store.canEdit(g.parent))) return
     if (!p.moved) {
       p.moved = true
@@ -1143,7 +1160,9 @@ export function SpaceCanvas({ store, scenery, status, follow = null, onStopFollo
         store.commit({ type: "update", id: p.id, patch: { w: Math.round(w), h: Math.round(h) } }, "resize")
       }
     } else if (p.kind === "items") {
-      if (!p.moved) {
+      if (!p.moved && p.fromEditor) {
+        // Just a click inside the text being edited: the caret went there; nothing else to do.
+      } else if (!p.moved) {
         const id = p.primary
         setSelection(p.additive ? (selected.has(id) ? selection.filter((x) => x !== id) : [...selection, id]) : [id])
         const n = space.node(id)
@@ -1324,6 +1343,12 @@ export function SpaceCanvas({ store, scenery, status, follow = null, onStopFollo
         onPointerMove={onPointerMove}
         onPointerUp={(e) => endPress(e)}
         onPointerCancel={(e) => endPress(e, true)}
+        onLostPointerCapture={(e) => {
+          // Capture can be taken away mid-drag (the window loses focus, a system gesture):
+          // finish the drag where it is instead of leaving it hanging.
+          const p = pressRef.current
+          if (p && p.pointer === e.pointerId && !(p.kind === "items" && p.fromEditor && !p.moved)) endPress(e)
+        }}
         onPointerLeave={() => {
           engine.setPointer({ x: 0, y: 0 })
           pointerAt.current = null
@@ -1484,10 +1509,16 @@ export function SpaceCanvas({ store, scenery, status, follow = null, onStopFollo
         )}
       </div>
 
-      <DraggablePanel id="nav" label="the path" defaultPos={{ corner: "tl", dx: 16, dy: 72 }}>
-        <Breadcrumbs path={path.map((b) => ({ id: b.id, title: titleOf(b) }))} onNavigate={(c) => flyToBoard(c.id)} onBack={path.length > 1 ? goUp : undefined} />
-        {status}
-      </DraggablePanel>
+      {/* The path continues the canvas title in the header (the title is the top level). */}
+      {crumbsTarget
+        ? createPortal(
+            <>
+              <Breadcrumbs path={path.map((b) => ({ id: b.id, title: titleOf(b) }))} onNavigate={(c) => flyToBoard(c.id)} onBack={path.length > 1 ? goUp : undefined} skipRoot />
+              {status}
+            </>,
+            crumbsTarget,
+          )
+        : null}
       {!store.readOnly && <Toolbar onPlace={place} onFiles={(f) => void addFiles(f)} />}
       <DraggablePanel id="zoom" label="the zoom controls" defaultPos={{ corner: "br", dx: 16, dy: 16 }}>
         <div className="zb-panel-stack">

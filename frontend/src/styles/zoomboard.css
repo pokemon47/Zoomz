@@ -1045,3 +1045,14 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
 .zb-pulse-icon { animation: zb-pulse 1.1s ease-in-out infinite; }
 @keyframes zb-pulse { 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) { .zb-pulse-icon { animation: none; } }
+
+/* ---------- the path, right after the canvas title in the header ---------- */
+.zb-path-slot { display: inline-flex; align-items: center; gap: 6px; min-width: 0; margin-left: calc(-1 * var(--space-3) + 4px); }
+.zb-crumbs.is-inline { box-shadow: var(--zb-l1); height: 38px; padding: 0 12px 0 4px; min-width: 0; overflow: hidden; }
+.zb-crumbs.is-inline ol { min-width: 0; overflow: hidden; }
+.zb-crumbs.is-inline .zb-crumb { max-width: 22vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zb-crumbs.is-inline .zb-ibtn { width: 30px; height: 30px; flex: none; }
+@media (max-width: 720px) { .zb-path-slot { margin-left: -2px; } .zb-crumbs.is-inline .zb-crumb { max-width: 26vw; } }
+.zb-topbar-mid .zb-board-title { flex: 0 3 auto; min-width: 64px; }
+.zb-path-slot { flex: 0 1 auto; }
+.zb-crumbs.is-inline { flex: 0 1 auto; min-width: 110px; }
