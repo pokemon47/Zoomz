@@ -115,9 +115,18 @@ async def email_unavailable(request: Request, exc: mail.DeliveryError):
 
 @app.middleware("http")
 async def guard(request: Request, call_next):
+    if request.url.path.startswith("/api/mcp/") and request.method in UNSAFE:
+        chunks, size = [], 0
+        async for chunk in request.stream():
+            size += len(chunk)
+            if size > 65536:
+                return JSONResponse({"detail": "MCP management request too large"}, status_code=413)
+            chunks.append(chunk)
+        request._body = b"".join(chunks)
     # CSRF: cookies are SameSite=Lax, and every state-changing API call must also carry a
     # custom header, which a cross-site form or image can't send.
-    if request.method in UNSAFE and request.url.path.startswith("/api/") and request.headers.get("x-zoomz") != "1":
+    oauth_public = request.url.path in {"/api/mcp/oauth/register", "/api/mcp/oauth/token", "/api/mcp/oauth/revoke"}
+    if request.method in UNSAFE and request.url.path.startswith("/api/") and not oauth_public and request.headers.get("x-zoomz") != "1":
         return JSONResponse({"detail": "Missing request header."}, status_code=403)
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -167,6 +176,10 @@ def client_error(body: ClientError, request: Request) -> dict:
 for r in (auth.router, account.router, spaces.router, files.router, discover.router, live.router):
     app.include_router(r)
 
+from . import mcp_access, mcp_ui
+app.include_router(mcp_access.router)
+app.include_router(mcp_ui.router)
+
 app.mount("/api/assets", StaticFiles(directory=STATIC_DIR), name="assets")
 
 
@@ -212,12 +225,33 @@ def _housekeeping() -> None:
                 referenced = {
                     (c or {}).get("fileId") for c in db.scalars(select(Node.content).where(Node.type.in_(("image", "file"))))
                 }
+                from .mcp_models import McpAudit, McpPending, McpCredential
+                from .mcp_access import clock
+                for content in db.scalars(select(Node.content)):
+                    referenced.update(ref.get("asset_id") for ref in (content or {}).get("references", []))
+                for record in db.scalars(select(McpAudit).where(McpAudit.action == "destructive_snapshot")):
+                    for node in record.detail.get("nodes", []):
+                        content = node.get("content", {})
+                        referenced.add(content.get("fileId"))
+                        referenced.update(ref.get("asset_id") for ref in content.get("references", []))
+                db.execute(delete(McpPending).where(McpPending.expires < clock()))
+                db.execute(delete(McpCredential).where(McpCredential.expires < clock() - 86400))
                 old = cutoff - timedelta(days=30)
                 for f in db.scalars(select(StoredFile).where(StoredFile.created_at < old)):
                     if f.id not in referenced:
                         delete_dir(f"{f.space_id}/{f.id}")
                         db.delete(f)
+                for marker in settings.storage_dir.glob("*/*/.mcp-staged"):
+                    if marker.stat().st_mtime < time.time() - 86400:
+                        if db.get(StoredFile, marker.parent.name):
+                            marker.unlink(missing_ok=True)
+                        else:
+                            delete_dir(f"{marker.parent.parent.name}/{marker.parent.name}")
                 db.commit()
         except Exception:  # noqa: BLE001
             log.exception("housekeeping failed")
         time.sleep(6 * 3600)
+
+
+from .mcp_server import install as install_mcp
+install_mcp(app)

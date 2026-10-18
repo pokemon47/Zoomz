@@ -34,31 +34,39 @@ export type FileFacts = {
 
 export type Frame = { x: number; y: number; w: number; h: number }
 
+export type SourceReference = {
+  title?: string; filename?: string; asset_id?: string; page?: number; slide?: number
+  section?: string; excerpt?: string; url?: string
+  classification: "source" | "supplementary" | "external"
+  availability?: "available" | "missing" | "unverified"
+}
+type Provenance = { references?: SourceReference[] }
+
 export type BoardNode = BaseNode & {
   type: "board"
-  content: { title: string; description?: string | null; frame?: Frame }
+  content: { title: string; description?: string | null; frame?: Frame } & Provenance
 }
 
 export type ImageNode = BaseNode & {
   type: "image"
-  content: { title: string; src: string; alt: string } & FileFacts
+  content: { title: string; src: string; alt: string } & FileFacts & Provenance
 }
 
 export type NoteNode = BaseNode & {
   type: "note"
-  content: { title: string; body: string }
+  content: { title: string; body: string } & Provenance
 }
 
 /** Any other uploaded file (PDF, video, document…). */
 export type FileNode = BaseNode & {
   type: "file"
-  content: { title: string; src: string; mime: string; size: number } & FileFacts
+  content: { title: string; src: string; mime: string; size: number } & FileFacts & Provenance
 }
 
 /** A pasted web link, with a preview (and an embed for YouTube, Vimeo, Figma). */
 export type LinkNode = BaseNode & {
   type: "link"
-  content: { url: string; title?: string; description?: string; image?: string | null; site?: string; embed?: string | null }
+  content: { url: string; title?: string; description?: string; image?: string | null; site?: string; embed?: string | null } & Provenance
 }
 
 export type SceneNode = BoardNode | ImageNode | NoteNode | FileNode | LinkNode
