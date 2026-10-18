@@ -42,6 +42,10 @@ class Settings:
     #: Signs file URLs and share tokens. Must be set (and stable) in production.
     secret_key: str = field(default_factory=lambda: os.environ.get("SECRET_KEY", ""), repr=False)
     session_days: int = field(default_factory=lambda: _int("SESSION_DAYS", 30))
+    #: How long someone who joined through an emailed invite can use Zoomz before signing in.
+    guest_days: int = field(default_factory=lambda: _int("GUEST_DAYS", 14))
+    #: How long an emailed invite link stays valid.
+    invite_days: int = field(default_factory=lambda: _int("INVITE_DAYS", 14))
     magic_link_minutes: int = field(default_factory=lambda: _int("MAGIC_LINK_MINUTES", 20))
 
     smtp_host: Optional[str] = field(default_factory=lambda: os.environ.get("SMTP_HOST") or None)

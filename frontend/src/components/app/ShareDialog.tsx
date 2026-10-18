@@ -64,7 +64,7 @@ export function ShareDialog({ spaceId, title, space, open, onClose }: Props) {
       <DialogContent className="zb-dialog zb-dialog-wide zb-share" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="zb-dialog-title">Share “{title}”</DialogTitle>
-          <DialogDescription>{owner ? "Invite people, or turn on a link." : "People on this board."}</DialogDescription>
+          <DialogDescription>{owner ? "Invite people, or turn on a link." : "People on this canvas."}</DialogDescription>
         </DialogHeader>
 
         {owner && (
@@ -92,7 +92,7 @@ export function ShareDialog({ spaceId, title, space, open, onClose }: Props) {
                   {m.name}
                   {m.userId === user?.id ? " (you)" : ""}
                 </strong>
-                <span>{m.via === "workspace" ? `${m.email} · via workspace` : m.email}</span>
+                <span title={m.via === "workspace" ? "Has access through the workspace. Remove them in the workspace's Members to take it away." : undefined}>{m.via === "workspace" ? `${m.email} · via workspace` : m.email}</span>
               </div>
               {owner && m.via === "space" && m.userId !== user?.id ? (
                 <select value={m.role} aria-label={`${m.name}'s access`} onChange={(e) => run(() => api(`/api/spaces/${spaceId}/members/${m.userId}`, { method: "PUT", json: { role: e.target.value } }))}>
@@ -104,7 +104,7 @@ export function ShareDialog({ spaceId, title, space, open, onClose }: Props) {
                 <span className="zb-role">{m.role === "owner" ? "Owner" : m.role === "editor" ? "Can edit" : "Can view"}</span>
               )}
               {owner && m.via === "space" && m.userId !== user?.id && (
-                <button type="button" className="zb-ibtn zb-ibtn-sm" aria-label={`Remove ${m.name}`} onClick={() => run(() => api(`/api/spaces/${spaceId}/members/${m.userId}`, { method: "DELETE" }))}>
+                <button type="button" className="zb-ibtn zb-ibtn-sm" aria-label={`Remove ${m.name}'s access`} title="Remove access" onClick={() => run(() => api(`/api/spaces/${spaceId}/members/${m.userId}`, { method: "DELETE" }))}>
                   <Trash2 size={14} strokeWidth={2.25} aria-hidden />
                 </button>
               )}

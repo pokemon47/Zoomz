@@ -75,6 +75,8 @@ export class SceneStore {
   spaceId: string | null
   publicToken: string | null
   title: string
+  /** The workspace this board lives in ("" for the local demo). */
+  workspaceId = ""
   scenery: string
   role: Role
   boardRoles: Record<string, Role>
@@ -102,6 +104,7 @@ export class SceneStore {
     this.spaceId = this.local ? null : snapshot.space.id
     this.publicToken = opts.publicToken ?? null
     this.title = snapshot.space.title
+    this.workspaceId = snapshot.space.workspaceId
     this.scenery = snapshot.space.scenery
     this.role = snapshot.space.role
     this.boardRoles = snapshot.boardRoles
@@ -152,26 +155,64 @@ export class SceneStore {
     return true
   }
 
+  /** Run several commits as one undo step (e.g. re-stacking a whole selection). */
+  group(label: string, fn: () => void) {
+    const start = this.undoStack.length
+    fn()
+    const added = this.undoStack.splice(start)
+    if (added.length) this.undoStack.push({ op: { type: "batch", ops: added.map((e) => e.op).reverse() }, label })
+  }
+
+  /**
+   * Undo your own last change. Like Google Docs and Canva, it only puts back the fields you
+   * changed, so other people's later edits to the same card stay; anything a collaborator has
+   * since deleted is skipped quietly, and an entry with nothing left to undo is passed over.
+   */
   undo(): string | null {
-    const entry = this.undoStack.pop()
-    if (!entry) return null
-    const inverse = this.inverseOf(entry.op)
-    this.applyLocal(entry.op)
-    this.redoStack.push({ op: inverse, label: entry.label })
-    this.send(entry.op)
-    this.emit()
-    return entry.label
+    return this.step(this.undoStack, this.redoStack)
   }
 
   redo(): string | null {
-    const entry = this.redoStack.pop()
-    if (!entry) return null
-    const inverse = this.inverseOf(entry.op)
-    this.applyLocal(entry.op)
-    this.undoStack.push({ op: inverse, label: entry.label })
-    this.send(entry.op)
-    this.emit()
-    return entry.label
+    return this.step(this.redoStack, this.undoStack)
+  }
+
+  private step(from: { op: Op; label: string }[], to: { op: Op; label: string }[]): string | null {
+    for (let entry = from.pop(); entry; entry = from.pop()) {
+      const op = this.stillApplicable(entry.op)
+      if (!op) continue
+      const inverse = this.inverseOf(op)
+      this.applyLocal(op)
+      to.push({ op: inverse, label: entry.label })
+      this.send(op)
+      this.emit()
+      return entry.label
+    }
+    return null
+  }
+
+  /** The part of an operation that still makes sense now: edits to cards someone else deleted
+   *  (or new cards whose board is gone) are dropped. Null when nothing is left. */
+  stillApplicable(op: Op, made = new Set<string>()): Op | null {
+    const exists = (id: string | null | undefined) => !!id && (made.has(id) || !!this.space.node(id))
+    switch (op.type) {
+      case "batch": {
+        const ops = op.ops.map((o) => this.stillApplicable(o, made)).filter((o): o is Op => !!o)
+        return ops.length ? { type: "batch", ops } : null
+      }
+      case "create":
+        if (this.space.node(op.node.id) || !exists(op.node.parentId)) return null
+        made.add(op.node.id)
+        return op
+      case "delete":
+        return exists(op.id) ? op : null
+      case "update":
+        if (!exists(op.id)) return null
+        if (op.patch.parentId && !exists(op.patch.parentId)) {
+          const { parentId: _gone, x: _x, y: _y, ...rest } = op.patch
+          return Object.keys(rest).length ? { ...op, patch: rest } : null
+        }
+        return op
+    }
   }
 
   private allowed(op: Op): boolean {
@@ -302,10 +343,12 @@ export class SceneStore {
           this.space.removeNode(id)
           const p = this.space.at(cur)
           const content = { ...cur.content, ...stored, fileId: stored.id, src: (stored.src as string) ?? blob }
+          const sw = Number(stored.width), sh = Number(stored.height)
+          const size = isImage && !Number.isFinite(ratio) && sw > 0 && sh > 0 ? { w: cur.w, h: imageCardHeight(cur.w, sh / sw) } : {}
           delete (content as Record<string, unknown>).progress
           delete (content as Record<string, unknown>).id
           delete (content as Record<string, unknown>).filename
-          this.commit({ type: "create", node: { ...cur, x: p.x, y: p.y, content } as SceneNode }, "add files")
+          this.commit({ type: "create", node: { ...cur, ...size, x: p.x, y: p.y, content } as SceneNode }, "add files")
         } catch (e) {
           this.space.removeNode(id)
           this.emit()
@@ -364,10 +407,14 @@ export class SceneStore {
 
   private send(op: Op) {
     if (this.local) return
-    const cid = newId("op")
-    const ids = opIds(op)
-    const entry: Pending = { cid, op: sendable(op), sent: false, ids }
-    this.pending.push(entry)
+    // The server takes plain operations or one flat batch of up to 500 (undoing a multi-item
+    // delete, for instance, builds a batch of batches), so flatten, and split very large ones.
+    const flat = flatten(op).map(sendable)
+    for (let i = 0; i < flat.length; i += MAX_BATCH) {
+      const chunk = flat.slice(i, i + MAX_BATCH)
+      const one: Op = chunk.length === 1 ? chunk[0] : { type: "batch", ops: chunk }
+      this.pending.push({ cid: newId("op"), op: one, sent: false, ids: opIds(one) })
+    }
     this.flush()
   }
 
@@ -529,6 +576,14 @@ function opIds(op: Op): string[] {
 }
 
 /** What goes over the wire: no local blob URLs or derived file facts. */
+/** Most operations the server accepts in one batch. */
+const MAX_BATCH = 500
+
+/** The plain operations inside an operation, in order (batches of batches unpacked). */
+export function flatten(op: Op): Op[] {
+  return op.type === "batch" ? op.ops.flatMap(flatten) : [op]
+}
+
 function sendable(op: Op): Op {
   if (op.type === "batch") return { type: "batch", ops: op.ops.map(sendable) }
   if (op.type !== "create") return op
@@ -538,11 +593,28 @@ function sendable(op: Op): Op {
   return { type: "create", node: { ...op.node, content } as SceneNode }
 }
 
+/** The thin, even border of mat around a picture, in card units. */
+export const IMAGE_MAT = 6
+
+/** Image card size for a picture of shape `ratio` (h / w): the picture plus an even mat. */
+export function imageCard(ratio: number, maxW = 220, maxH = 420): { w: number; h: number } {
+  const r = Number.isFinite(ratio) ? ratio : 1.25
+  const m = IMAGE_MAT * 2
+  const w = Math.max(60, Math.min(maxW, Math.round(m + (maxH - m) / r)))
+  return { w, h: Math.round(m + (w - m) * r) }
+}
+
+/** The card height that fits a picture of `ratio` at this card width. */
+export function imageCardHeight(w: number, ratio: number): number {
+  return Math.round(IMAGE_MAT * 2 + (w - IMAGE_MAT * 2) * ratio)
+}
+
 export function imageRatio(src: string): Promise<number> {
   return new Promise((resolve) => {
     const img = new Image()
-    img.onload = () => resolve(Math.min(1.8, Math.max(0.5, img.naturalHeight / Math.max(1, img.naturalWidth))))
-    img.onerror = () => resolve(1.25)
+    // The picture's true shape (height / width); cards are sized to it so nothing is cropped.
+    img.onload = () => resolve(Math.min(20, Math.max(0.05, img.naturalHeight / Math.max(1, img.naturalWidth))))
+    img.onerror = () => resolve(NaN) // e.g. HEIC: the server reports the real size after upload
     img.src = src
   })
 }

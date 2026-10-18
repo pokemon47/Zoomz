@@ -339,3 +339,130 @@ describe("fit board", () => {
     expect(cy).toBeCloseTo(pad.top + (vp.h - pad.top - pad.bottom) / 2, 3)
   })
 })
+
+describe("undo with collaborators (Google Docs / Canva style)", () => {
+  const make = () => {
+    const nodes: Scene["nodes"] = [
+      { id: "root", type: "board", parentId: null, x: 0, y: 0, w: 10, h: 10, content: { title: "Root" } },
+      { id: "b", type: "board", parentId: "root", x: 500, y: 0, w: 360, h: 300, content: { title: "B" } },
+      { id: "n", type: "note", parentId: "root", x: 10, y: 20, w: 220, h: 190, content: { title: "Mine", body: "hello" } },
+    ]
+    return new SceneStore({ space: { id: "s", title: "t", role: "owner", scenery: "studio", workspaceId: "" }, rootBoardId: "root", seq: 0, nodes, boardRoles: {} }, { local: true })
+  }
+  // What arrives from someone else (the store applies server changes like this).
+  const remote = (st: SceneStore, id: string, patch: Record<string, unknown>) => {
+    const n = st.space.node(id)!
+    st.space.upsert({ ...n, ...patch, content: { ...n.content, ...((patch.content as object) ?? {}) } } as never)
+  }
+
+  it("undoing my move keeps someone else's later text edit", () => {
+    const st = make()
+    st.commit({ type: "update", id: "n", patch: { x: 300, y: 400 } })
+    remote(st, "n", { content: { body: "edited by Mina" } })
+    st.undo()
+    const n = st.space.node("n")!
+    expect([n.x, n.y]).toEqual([10, 20])
+    expect((n.content as { body: string }).body).toBe("edited by Mina")
+  })
+
+  it("undoing my text edit keeps someone else's later move", () => {
+    const st = make()
+    st.commit({ type: "update", id: "n", patch: { content: { body: "mine" } } })
+    remote(st, "n", { x: 999 })
+    st.undo()
+    const n = st.space.node("n")!
+    expect((n.content as { body: string }).body).toBe("hello")
+    expect(n.x).toBe(999)
+  })
+
+  it("skips quietly when a collaborator deleted the card, and doesn't bring it back", () => {
+    const st = make()
+    st.commit({ type: "update", id: "n", patch: { x: 300 } })
+    st.space.removeNode("n")
+    expect(st.undo()).toBeNull()
+    expect(st.space.node("n")).toBeUndefined()
+  })
+
+  it("moving a card into a board undoes in one step, back to its board and place", () => {
+    const st = make()
+    st.commit({ type: "update", id: "n", patch: { parentId: "b", x: 5, y: 6 } })
+    expect(st.space.node("n")!.parentId).toBe("b")
+    st.undo()
+    const n = st.space.node("n")!
+    expect([n.parentId, n.x, n.y]).toEqual(["root", 10, 20])
+    st.redo()
+    expect(st.space.node("n")!.parentId).toBe("b")
+  })
+
+  it("a multi-item paste undoes as one action", () => {
+    const st = make()
+    const ops = Array.from({ length: 10 }, (_, i) => ({ type: "create" as const, node: { id: `p${i}`, type: "note" as const, parentId: "b", x: i, y: i, w: 100, h: 100, content: { title: "", body: `${i}` } } }))
+    st.commit({ type: "batch", ops }, "paste")
+    expect(st.space.index.children.get("b")!.length).toBe(10)
+    expect(st.undo()).toBe("paste")
+    expect(st.space.index.children.get("b") ?? []).toHaveLength(0)
+  })
+
+  it("undoing a delete restores a board with everything inside it", () => {
+    const st = make()
+    st.commit({ type: "create", node: { id: "k", type: "note", parentId: "b", x: 1, y: 1, w: 100, h: 100, content: { title: "", body: "kid" } } })
+    st.commit({ type: "delete", id: "b" })
+    expect(st.space.node("k")).toBeUndefined()
+    st.undo()
+    expect(st.space.node("b")).toBeDefined()
+    expect(st.space.node("k")!.parentId).toBe("b")
+  })
+})
+
+describe("one action, one undo step", () => {
+  it("re-stacking several selected cards undoes together", () => {
+    const nodes: Scene["nodes"] = [
+      { id: "root", type: "board", parentId: null, x: 0, y: 0, w: 10, h: 10, content: { title: "Root" } },
+      ...["p", "q", "r"].map((id) => ({ id, type: "image" as const, parentId: "root", x: 0, y: 0, w: 10, h: 10, content: { title: id, src: "", alt: "" } })),
+    ]
+    const st = new SceneStore({ space: { id: "s", title: "t", role: "owner", scenery: "studio", workspaceId: "" }, rootBoardId: "root", seq: 0, nodes, boardRoles: {} }, { local: true })
+    const order = () => sortByLayer(st.space.index.children.get("root")!).map((n) => n.id).join("")
+    st.group("bring to front", () => {
+      for (const id of ["q", "p"]) st.commit(layerOps(st.space, id, "front")!, "bring to front")
+    })
+    expect(order()).toBe("rqp")
+    expect(st.undo()).toBe("bring to front")
+    expect(order()).toBe("pqr")
+  })
+})
+
+describe("copy and paste", () => {
+  it("pastes a nested board with new ids, keeps the arrangement, and undoes in one step", async () => {
+    const { copyNodes, pasteOps } = await import("./clipboard")
+    const nodes: Scene["nodes"] = [
+      { id: "root", type: "board", parentId: null, x: 0, y: 0, w: 10, h: 10, content: { title: "Root" } },
+      { id: "src", type: "board", parentId: "root", x: 0, y: 0, w: 360, h: 300, content: { title: "Src" } },
+      { id: "dst", type: "board", parentId: "root", x: 900, y: 0, w: 360, h: 300, content: { title: "Dst" } },
+      { id: "nb", type: "board", parentId: "src", x: 100, y: 100, w: 360, h: 300, content: { title: "Nested" } },
+      { id: "k1", type: "note", parentId: "nb", x: 10, y: 20, w: 100, h: 100, content: { title: "", body: "a" } },
+      { id: "k2", type: "note", parentId: "src", x: 500, y: 140, w: 100, h: 100, content: { title: "", body: "b" } },
+    ]
+    const st = new SceneStore({ space: { id: "s", title: "t", role: "owner", scenery: "studio", workspaceId: "" }, rootBoardId: "root", seq: 0, nodes, boardRoles: {} }, { local: true })
+    const clip = copyNodes(st.space, ["nb", "k2"], null)!
+    const { op, roots } = await pasteOps(clip, "dst", 600, 400, null)
+    st.commit(op, "paste")
+    const pasted = roots.map((id) => st.space.node(id)!)
+    expect(pasted.every((n) => n.parentId === "dst" && !["nb", "k2"].includes(n.id))).toBe(true)
+    // Relative arrangement is kept.
+    const [b, n] = pasted
+    expect([n.x - b.x, n.y - b.y]).toEqual([400, 40])
+    // The nested board came with its contents; the originals are untouched.
+    expect((st.space.index.children.get(b.id) ?? []).map((k) => (k.content as { body: string }).body)).toEqual(["a"])
+    expect(st.space.node("k1")!.parentId).toBe("nb")
+    st.undo()
+    expect(st.space.index.children.get("dst") ?? []).toHaveLength(0)
+  })
+})
+
+describe("sending undo of a multi-item delete", () => {
+  it("unpacks a batch of batches into plain operations", async () => {
+    const { flatten } = await import("./store")
+    const op = { type: "batch", ops: [{ type: "batch", ops: [{ type: "delete", id: "a" }] }, { type: "batch", ops: [{ type: "delete", id: "b" }, { type: "batch", ops: [] }] }, { type: "delete", id: "c" }] } as const
+    expect(flatten(op as never).map((o) => (o as { id: string }).id)).toEqual(["a", "b", "c"])
+  })
+})

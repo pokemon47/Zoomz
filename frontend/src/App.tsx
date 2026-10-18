@@ -7,7 +7,7 @@ import { StatePanel } from "@/components/zoomboard/StatePanel"
 import { InvitePage, PublicPage } from "@/pages/AccessPages"
 import { BoardPage } from "@/pages/BoardPage"
 import { HomePage } from "@/pages/HomePage"
-import { LoginPage } from "@/pages/LoginPage"
+import { LoginPage, SignInConfirmPage } from "@/pages/LoginPage"
 import { LegalPage, SettingsPage } from "@/pages/SettingsPage"
 import { AiPage } from "@/pages/AiPage"
 import { McpRenderPage } from "@/pages/McpRenderPage"
@@ -35,7 +35,9 @@ function Routes() {
   if (path === "/mcp-render") return <McpRenderPage />
   if (path === "/terms") return <LegalPage kind="terms" />
   if (path === "/privacy") return <LegalPage kind="privacy" />
-  let m = match("/p/:token", path)
+  let m = match("/signin/:token", path)
+  if (m) return <SignInConfirmPage token={m.token} />
+  m = match("/p/:token", path)
   if (m) return <PublicPage token={m.token} />
   m = match("/invite/:token", path)
   if (m) return <InvitePage token={m.token} kind="invite" />

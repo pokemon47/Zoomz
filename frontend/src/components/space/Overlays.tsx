@@ -72,6 +72,8 @@ export function editFields(n: SceneNode): EditField[] {
       ]
     case "file":
       return [{ key: "title", label: "Name", value: s("title"), max: 255 }]
+    case "arrow":
+      return []
   }
 }
 

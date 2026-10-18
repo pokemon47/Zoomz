@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import delete, select, text
 
-from . import account, auth, discover, files, live, spaces, mail
+from . import account, auth, canvas, discover, export, files, live, spaces, mail
 from .config import settings
 from .db import SessionLocal, engine
 
@@ -173,7 +173,7 @@ def client_error(body: ClientError, request: Request) -> dict:
     return {"ok": True}
 
 
-for r in (auth.router, account.router, spaces.router, files.router, discover.router, live.router):
+for r in (auth.router, account.router, spaces.router, canvas.router, files.router, discover.router, export.router, live.router):
     app.include_router(r)
 
 from . import mcp_access, mcp_ui

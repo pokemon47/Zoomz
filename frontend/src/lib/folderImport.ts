@@ -1,3 +1,5 @@
+import { imageCard } from "./store"
+
 // Dropping a folder from the desktop recreates it as boards: every folder becomes a board,
 // every subfolder a board inside it, and the files land on the board of their folder.
 
@@ -100,11 +102,8 @@ export function planFolder(tree: FolderTree): BoardPlan {
   return { name: tree.name, frame, w: boardW, h: Math.round((boardW * frame.h) / frame.w), files: tree.files, fileCells, folders }
 }
 
-/** An image or file card that fits a file cell. */
+/** An image or file card that fits a file cell, at the picture's true shape. */
 export function fileCard(file: File, ratio: number): { w: number; h: number } {
   if (!file.type.startsWith("image/")) return { w: 200, h: 240 }
-  // Image cards are a 16px mat around the picture plus a 36px caption strip.
-  const maxH = IMPORT_GRID.fileCellH - 30
-  const w = Math.min(220, Math.round(16 + (maxH - 52) / ratio))
-  return { w, h: Math.round(16 + (w - 16) * ratio + 36) }
+  return imageCard(ratio, 220, IMPORT_GRID.fileCellH - 30)
 }

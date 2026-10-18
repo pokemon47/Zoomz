@@ -39,7 +39,7 @@ function heldSize(n: SceneNode): { w: number; h: number; bar: boolean } {
   }
   const c = n.content as { width?: number; height?: number; embed?: string | null; mime?: string; preview?: string }
   if (n.type === "note") return fit(0.82, false)
-  if (n.type === "image") return fit(c.width && c.height ? c.width / c.height : n.w / Math.max(1, n.h - 52))
+  if (n.type === "image") return fit(c.width && c.height ? c.width / c.height : (n.w - 12) / Math.max(1, n.h - 12))
   if (n.type === "link") return fit(c.embed ? 16 / 9 : 1.5)
   if (n.type === "file") return fit(c.mime === "application/pdf" ? 0.75 : c.mime?.startsWith("video/") ? 16 / 9 : 1.3)
   return fit(1.3)

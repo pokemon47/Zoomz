@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Optional
+from typing import Any, BinaryIO, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -48,21 +48,28 @@ def store_upload(space_id, request, file, user, db, *, commit=True, file_id=None
     if not can_edit(role_at(db, space, role, user, board)):
         raise HTTPException(403, "You can only view this board.")
     limit(request, "upload", 120, 40, key=user.id)
-    max_bytes = settings.max_upload_mb * 1024 * 1024
     if storage.used_bytes(space.id) >= settings.space_quota_mb * 1024 * 1024:
         raise HTTPException(413, f"This board has used its {settings.space_quota_mb // 1024} GB of storage. Remove some files first.")
 
-    fid = file_id or new_id()
-    name = (file.filename or "file").replace("/", "_").replace("\\", "_")[:255] or "file"
-    head = file.file.read(8192)
-    file.file.seek(0)
+    rec = ingest(db, space, user, file.file, file.filename or "file", file.content_type or "")
+    return file_out(rec)
+
+
+def ingest(db: Session, space, user: Optional[User], stream: BinaryIO, filename: str, content_type: str = "") -> StoredFile:
+    """Store one file in a space: check its type from its bytes, size-limit, scan, sanitise
+    SVGs, make previews. Commits and returns the record; raises HTTPException if refused."""
+    max_bytes = settings.max_upload_mb * 1024 * 1024
+    fid = new_id()
+    name = (filename or "file").replace("/", "_").replace("\\", "_")[:255] or "file"
+    head = stream.read(8192)
+    stream.seek(0)
     try:
-        mime, kind = media.classify(head, name, file.content_type or "")
+        mime, kind = media.classify(head, name, content_type or "")
     except media.Rejected as e:
         raise HTTPException(415, str(e))
     base = f"{space.id}/{fid}"
     try:
-        size, sha = storage.write_stream(file.file, f"{base}/original", max_bytes)
+        size, sha = storage.write_stream(stream, f"{base}/original", max_bytes)
     except storage.TooLarge:
         storage.delete_dir(base)
         raise HTTPException(413, f"Files can be up to {settings.max_upload_mb} MB.")
@@ -75,7 +82,7 @@ def store_upload(space_id, request, file, user, db, *, commit=True, file_id=None
         storage.delete_dir(base)
         raise HTTPException(422, str(e))
 
-    rec = StoredFile(id=fid, space_id=space.id, uploader_id=user.id, filename=name, mime=mime, kind=kind, size=size, sha256=sha, status="processing")
+    rec = StoredFile(id=fid, space_id=space.id, uploader_id=user.id if user else None, filename=name, mime=mime, kind=kind, size=size, sha256=sha, status="processing")
     # Fast previews inline (images, PDFs) so the card looks right immediately.
     try:
         if mime in media.RASTER:
@@ -93,7 +100,7 @@ def store_upload(space_id, request, file, user, db, *, commit=True, file_id=None
         db.flush()
     if slow and commit:
         worker.submit(_process_video, fid)
-    return file_out(rec)
+    return rec
 
 
 def _process_video(fid: str) -> None:

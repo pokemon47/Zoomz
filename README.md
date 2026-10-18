@@ -64,35 +64,42 @@ GitHub Actions runs SQLite tests, PostgreSQL migrations and tests, frontend chec
 | Fly to anything | Double-click it, or ⌘K search | Enter |
 | Go up a level | Breadcrumbs or Back | Escape |
 | Frame everything on the current board | **Fit board** | `0` |
-| Hide or show image and board captions | Captions button next to Fit board | `C` |
-| Jump somewhere on this board | Click or drag in the minimap | — |
+| Back out to level 1 and see the whole canvas | The home button next to Fit board | `⇧0` |
+| Hide or show board labels / photo labels (each on its own) | The two label buttons next to Fit board | `⇧L` / `L` |
+| Jump somewhere on this board | Click or drag in the minimap (its eye button folds it away to a small tab at the side) | — |
 | Move the path bar, zoom controls or map | Drag their grip | Grip + arrow keys |
 
 **Editing.** Edits save instantly and appear for everyone on the board.
 
 | Action | How |
 | --- | --- |
-| Add images, videos, PDFs, any file | Drop them (or whole folders: each folder becomes a board, subfolders become boards inside it) on any board, paste with ⌘V, or **Add → Images & files…** (upload progress is shown on the card) |
+| Add images, videos, PDFs, any file | Drop them (or whole folders: each folder becomes a board, subfolders become boards inside it) on any board, paste with ⌘V, or the picture button on the side toolbar (upload progress is shown on the card) |
 | Add a link | Paste a URL. Links get a preview; YouTube, Vimeo and Figma play in place up close |
-| New note / board | **Add**, or `N` / `B`. Pasting plain text also makes a note. Notes have no length limit: the text sizes itself to fill the note (a few words are big, a long note is small) and stays readable in the lightbox |
-| Edit text | Double-click a note, or a board's title strip (Enter also edits a focused note) |
+| New note / board / arrow | Drag it from the side toolbar and drop it exactly where you want it (or press `N` / `B` / `A` to put it in the middle). Click a tool first to pick its look: boards can be Plain (the background's own white, or dark in dark mode), Outline (a coloured rim and stack), Full colour (the deep colour on the rim and stack, a pastel of it on the surface) (Glass and Clear are built but switched off for now: `SEE_THROUGH_ENABLED` in `frontend/src/lib/fills.ts`); notes can be any colour; arrows pick their style. Right-click → Colour changes it later. A board's surface is also the floor once you step inside, so each board is a canvas of its own. Board surfaces are plain, without dots. The background dots are a fixed grid: they neither zoom nor pan with the content. Notes and boards open for typing straight away, no naming dialog. Pasting plain text also makes a note. Notes have no length limit: the text sizes itself to fill the note (a few words are big, a long note is small) and stays readable in the lightbox |
+| Edit text | Click a note's text, or a board's title or description, and type right there (Esc or clicking away saves; dragging still just moves). Images, files and links: right-click → Edit |
+| Connect things | Click the arrow on the side toolbar to pick its style (straight, curved or a 90° angle; solid or dotted; pointing forward, back, both ways or neither), then drag it onto the canvas. Select an arrow to change its style from the small bar over it; a curved arrow also shows a joint in its middle that you drag to set how much it bends. Drop an arrow on an item to start from it, then drag either end handle onto another item on the same board to attach it. Attached arrows follow their items around |
 | Move | Drag. Dropping onto another board moves the card *into* it, at that level's size |
 | Move a board | Drag its title strip (small boards: drag anywhere) |
-| Resize | Select one card and drag the blue corner grip (images keep their shape; Shift frees it) |
+| Resize | Select one card and drag the blue corner grip (pictures always keep their true shape) |
 | Select several | Shift-click, or Shift-drag on the floor for a marquee; ⌘A selects everything on this board |
 | Copy / cut / paste / duplicate | ⌘C / ⌘X / ⌘V / ⌘D. This works across boards and spaces; files are copied along |
-| Delete | Delete or Backspace |
+| Delete | Delete or Backspace (undo brings it back, with everything inside a board) |
 | Undo / redo your own changes | ⌘Z / ⇧⌘Z |
 
 **Working together.** Everyone on a board appears as an avatar in the top bar, with a live, named cursor. Click someone's avatar to follow their view; scroll or drag to stop. Cards other people are dragging move live. Being offline is fine: your edits queue and send when you reconnect, and the status pill shows anything unsaved.
 
 **Sharing** (owners, via **Share**):
 
-- **Invite by email** as an editor or viewer. The invite only works for that email address.
+- **Invite by email** as an editor or viewer. One click on the emailed link opens the board and signs the person in, with no second email. Someone new becomes a **guest**: they keep their invited access for 14 days (`GUEST_DAYS`), then sign in normally to keep going. The link works once, only for that email address, and opening it (as mail scanners do) doesn't use it up. If someone else is signed in on that browser, Zoomz asks which account to use.
+- **Workspace invites** work the same way and give access to every board in the workspace. Owners can remove anyone's access from the share dialog or the workspace's Members; they're disconnected at once.
 - **Join link:** anyone with it who signs in gets the access you pick. It can expire after 1, 7 or 30 days, and you can turn it off at any time.
 - **Public link:** view-only, no account needed.
 - **Per-board access:** give a member a different role inside one board and everything in it. For example, someone can edit the whole space but only view the "Final picks" board.
 - **Team workspaces:** members see every board in the workspace with their workspace role. A person's role is the higher of their workspace role and their board-space role.
+
+**Canvases.** Each workspace holds canvases (shown on the dashboard); each canvas holds boards, notes, pictures and arrows. Start one with **New blank canvas**, or **Import canvas** to bring back an exported one. Each canvas has a ⋯ menu: **Duplicate canvas** (a full copy: every item where it was, its files, and its scenery), **Export canvas** and, for owners, **Delete** (asks first, then deletes permanently). The workspace ⋯ menu renames it or deletes it with everything in it (type its name to confirm). Your Personal workspace can be renamed but not deleted.
+
+**Exporting and importing.** A canvas (from the dashboard, or right-click any board inside one) downloads as a zip: a folder per board, pictures and files under their own names, notes as Markdown, links in `links.md`, and `zoomz-manifest.json` (format version 2) with everything needed to rebuild it exactly: every item's type, position, size, height, stacking, titles, captions, text, arrow ends and attachments, plus the canvas's scenery. **Import canvas** turns such a zip into a new canvas in the workspace, laid out exactly as it was; the files go through the normal upload checks.
 
 **Your account** (Settings): change your name and cursor colour, choose **Light**, **Dark** or **System** appearance (remembered per browser, applied before the page paints), download all your data as a zip, or delete your account along with everything in the workspaces you created.
 
@@ -116,6 +123,7 @@ For the standard Docker Compose deployment, copy `.env.production.example` to `.
 | `MAX_UPLOAD_MB`, `UPLOAD_BODY_LIMIT` | Backend file limit and nginx body limit. Defaults 200 and `201m`; allow multipart overhead when changing them. |
 | `SPACE_QUOTA_MB` | Default 5120. Monitor available volume capacity separately. |
 | `TRUSTED_PROXY_CIDR` | Exact ingress network confirmed by the host. Default only trusts loopback. Never use `0.0.0.0/0`. Correct configuration is needed for per-client IP rate limits. |
+| `SESSION_DAYS`, `GUEST_DAYS`, `INVITE_DAYS` | How long a sign-in lasts (30), how long invite-only guests can use Zoomz before signing in (14), and how long an invite link is valid (14). Sessions have a fixed length: using Zoomz doesn't extend them. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional. Register `PUBLIC_URL/api/auth/google/callback` with Google. |
 
 Legacy development `SMTP_TLS` remains supported, but production requires explicit `SMTP_ENCRYPTION`. Missing or malformed production SMTP, URL, database, secret, and storage settings fail startup without exposing their values.
@@ -221,25 +229,26 @@ Run the acceptance checks before switching traffic. Keep the original project in
 - **One continuous, infinitely nested space** (`frontend/src/lib/space.ts`). A board's contents are drawn on its card face, mapped into the board's stored content window (`content.frame`). The camera is always expressed in one board's own frame. When a child board covers the viewport, the camera re-anchors into it; when the current board stops covering the viewport, it re-anchors into the parent. Rendering is identical on both sides, so the transition is invisible and precision never runs out.
 - **The board you're standing in** is drawn as a screen-sized floor, not as a card scaled 50× or more. A huge scaled card overflows GPU texture limits and flickers.
 - **Walking, not scaling.** Things raised `z` above the floor get a perspective boost `g = 1 / (1 − z·s / eye)`, so notes rush toward you faster than prints. The pointer adds height-weighted parallax, and anything that reaches the eye fades as you pass it.
-- **Scenery** (`frontend/src/lib/scenery.ts`). Studio, Mountains, Clouds, Forest, Dunes and Cosmos: endless low-poly layers you move through as you zoom, with haze, pass-by fades and parallax. Board floors are frosted so the world shows through. Editors set a board's scenery for everyone; viewers can choose their own.
+- **Scenery** (`frontend/src/lib/scenery.ts`). Studio, Mountains, Clouds, Forest, Dunes and Cosmos, chosen from the small swatch next to search (hover it to see the others): endless low-poly layers you move through as you zoom, with haze, pass-by fades and parallax. Board floors are frosted so the world shows through. Editors set a board's scenery for everyone; viewers can choose their own.
 - **Camera** (`frontend/src/lib/cameraEngine.ts`). Wheel input glides in log-scale. Pans and pinches are direct. Flights for search, breadcrumbs, Fit and follow interpolate across levels in a common frame. The frame loop only runs while something moves.
 
 **Collaboration**
 
 - **One path for every edit.** Each change is an operation (`create` / `update` / `delete` / `batch`). The scene store (`frontend/src/lib/store.ts`) applies it locally at once, records its inverse for your undo, and sends it over the board's WebSocket. The server (`backend/app/ops.py`) checks permissions and invariants (no board inside itself, the top board is protected, content fields are whitelisted and length-limited, coordinates are clamped). It writes the change, gives it the next sequence number, logs it and broadcasts the result.
 - **Conflicts** resolve by the server's order: the last write to a field wins, and every client converges because results apply in sequence. While one of your own edits to a card is in flight, other people's updates to that card wait behind it. A rejected edit, or a gap in the log after a long disconnect, triggers a fresh snapshot, and anything you hadn't sent yet is re-applied on top.
+- **Undo with collaborators** works like Google Docs or Canva: you only undo your own changes, and only the fields you changed, so a teammate's later edit to the same card stays. Parts of an undo that touch cards someone else has since deleted are skipped quietly. One action is one step: a drag, a resize, a paste of many cards or re-stacking a selection all undo at once.
 - **Presence and drag previews** (`backend/app/live.py`) are relayed but never stored. Removing someone's access closes their socket immediately.
 
 **Accounts, permissions, files** (backend)
 
-- **Sign-in** by one-time email link (20 minutes, single use) or Google (OAuth with PKCE). Sessions are httpOnly, SameSite=Lax cookies stored hashed; so are magic-link and invite tokens. Every state-changing request must carry an `X-Zoomz` header (CSRF), and WebSockets check their Origin. Sign-in, invites, uploads, search and link previews are rate-limited.
+- **Sign-in** by one-time email link (20 minutes, single use; the link opens a page and only its button signs in, so mail scanners can't use it up) or Google (OAuth with PKCE). Sessions last a fixed `SESSION_DAYS`; logging out revokes the session on the server. Sessions are httpOnly, SameSite=Lax cookies stored hashed; so are magic-link and invite tokens. Every state-changing request must carry an `X-Zoomz` header (CSRF), and WebSockets check their Origin. Sign-in, invites, uploads, search and link previews are rate-limited.
 - **Roles** (`backend/app/permissions.py`): owner > editor > viewer. Your space role is the higher of your workspace and space roles. A board override replaces it for one board and everything below it, and owners are never overridden. The snapshot tells the client your role in every board, so view-only boards don't offer edits.
 - **Files** (`backend/app/files.py`, `media.py`, `storage.py`):
   - Type is decided from the file's bytes, not its name. Programs and installers are refused, and SVGs are rebuilt without scripts, event handlers or external references.
   - Size limits and per-board quotas apply, with optional ClamAV scanning.
   - Images get 256 px and 1024 px WebP thumbnails, and cards load the smallest one that's sharp at their on-screen size. PDFs get a first-page preview. Videos get a poster frame, plus an H.264 transcode if the browser can't play the original; this runs in the background and the card updates live.
   - File URLs are signed and expire, and they're served with a sandboxed CSP and `nosniff`, so a file can never run as part of the app. Unreferenced files are cleaned up after 30 days.
-- **Search** covers every board you can access (titles, notes, descriptions, file names, link titles), and results fly you to the item.
+- **Search** (⌘K) looks in the board you're in and everything inside it by default, or the whole workspace; on the dashboard, the workspace you're viewing. It covers titles, notes, descriptions, file names and link titles, respects every permission, and results fly you to the item.
 - **Link previews** use oEmbed for YouTube and Vimeo, and page metadata otherwise. The server refuses private, loopback and link-local addresses on every redirect hop.
 - **Your data:** `/api/me/export` returns a zip of your profile and the boards you own, with their files. Deleting your account cascades through your workspaces, boards and files.
 - **Errors** in the browser are reported to `/api/client-errors` and logged (and sent to Sentry when `SENTRY_DSN` is set).

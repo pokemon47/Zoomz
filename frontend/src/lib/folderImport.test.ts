@@ -45,6 +45,18 @@ describe("folder import layout", () => {
   it("fits tall images into a cell", () => {
     const { h } = fileCard(file("tall.png"), 3)
     expect(h).toBeLessThanOrEqual(IMPORT_GRID.fileCellH)
-    expect(fileCard(file("wide.png"), 0.5)).toEqual({ w: 220, h: Math.round(16 + 204 * 0.5 + 36) })
+    expect(fileCard(file("wide.png"), 0.5)).toEqual({ w: 220, h: Math.round(12 + 208 * 0.5) })
+  })
+})
+
+describe("image cards keep the picture's true shape", () => {
+  it("sizes panoramas and tall shots exactly, without clamping", async () => {
+    const { imageCard } = await import("./store")
+    for (const r of [0.1, 0.25, 0.5, 1, 1.78, 3, 8]) {
+      const { w, h } = imageCard(r)
+      // An even 6px mat on every side around a picture of exactly this shape.
+      expect((h - 12) / (w - 12)).toBeCloseTo(r, 1)
+      expect(h).toBeLessThanOrEqual(421)
+    }
   })
 })

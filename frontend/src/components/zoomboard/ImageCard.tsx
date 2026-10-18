@@ -29,7 +29,7 @@ export const ImageCard = memo(function ImageCard({ title, alt, src, lod, selecte
       <img className="zb-ph" src={src} alt="" draggable={false} decoding="async" />
       {progress !== undefined && <Progress value={progress} />}
       {lod !== "far" && (
-        <div>
+        <div className="zb-img-caption">
           <div className="zb-cap">{title}</div>
           {lod === "close" && <div className="zb-alt">{alt}</div>}
         </div>

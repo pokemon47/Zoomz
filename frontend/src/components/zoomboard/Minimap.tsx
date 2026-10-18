@@ -1,5 +1,8 @@
+import { Eye } from "lucide-react"
 import { useRef, useState, type PointerEvent } from "react"
 import { DEPTH_DOT, floorFor } from "@/lib/constants"
+import { boardLook } from "@/lib/fills"
+import { arrowEnds, curveControl, elbowCorner, styleOf } from "@/lib/arrows"
 import { fileKind } from "@/lib/files"
 import { titleOf } from "@/lib/scene"
 import type { Cam, Space, Viewport } from "@/lib/space"
@@ -13,6 +16,8 @@ type Props = {
   vp: Viewport
   /** Centre the camera on a point of the focus board (local units). */
   onCenter(x: number, y: number, glide: boolean): void
+  /** Fold the map away. */
+  onHide?(): void
 }
 
 const MAP_W = 232
@@ -23,7 +28,7 @@ const TONE: Record<string, string> = { "zb-tomato": "var(--tomato)", "zb-cobalt"
  * Where you are: the board you're standing in, everything on it, and a frame for what's
  * on screen. Step into another board and the map falls into it with you.
  */
-export function Minimap({ space, focus, cam, vp, onCenter }: Props) {
+export function Minimap({ space, focus, cam, vp, onCenter, onHide }: Props) {
   const board = space.node(focus)
   const depth = space.depthOf(focus)
   const kids = space.index.children.get(focus) ?? []
@@ -85,6 +90,11 @@ export function Minimap({ space, focus, cam, vp, onCenter }: Props) {
         </span>
         <span className="zb-minimap-title">{board ? titleOf(board) : ""}</span>
         <span className="zb-meta">L{depth + 1}</span>
+        {onHide && (
+          <button type="button" className="zb-minimap-hide" onClick={onHide} aria-label="Hide the map" title="Hide the map" data-no-drag>
+            <Eye size={14} strokeWidth={2.25} aria-hidden />
+          </button>
+        )}
       </div>
       <div className="zb-minimap-well" style={{ background: floorFor(depth) }}>
         <svg
@@ -110,18 +120,44 @@ export function Minimap({ space, focus, cam, vp, onCenter }: Props) {
           {kids.map((n) => {
             const p = space.at(n)
             const r = Math.min(n.w, n.h) * 0.08
-            if (n.type === "board")
+            if (n.type === "board") {
+              const look = boardLook(n.content)
+              const see = look.fill === "glass" || look.fill === "clear"
               return (
-                <g key={n.id}>
-                  <rect x={p.x + n.w * 0.06} y={p.y + n.h * 0.08} width={n.w} height={n.h} rx={r * 1.5} fill="var(--mint)" />
-                  <rect x={p.x + n.w * 0.03} y={p.y + n.h * 0.04} width={n.w} height={n.h} rx={r * 1.5} fill="var(--lilac)" />
-                  <rect x={p.x} y={p.y} width={n.w} height={n.h} rx={r * 1.5} fill={floorFor(depth + 1)} stroke="var(--surface-side)" strokeWidth={n.w * 0.02} />
+                <g key={n.id} opacity={see ? 0.75 : 1}>
+                  {!see && <rect x={p.x + n.w * 0.06} y={p.y + n.h * 0.08} width={n.w} height={n.h} rx={r * 1.5} fill={look.color ? look.color.side : "var(--mint)"} />}
+                  {!see && <rect x={p.x + n.w * 0.03} y={p.y + n.h * 0.04} width={n.w} height={n.h} rx={r * 1.5} fill={look.layer ?? "var(--lilac)"} />}
+                  <rect x={p.x} y={p.y} width={n.w} height={n.h} rx={r * 1.5} fill={look.fill === "glass" ? "var(--glass)" : look.surface} stroke={look.rim ?? (see ? "var(--ink-muted)" : "var(--surface-side)")} strokeWidth={n.w * (look.rim ? 0.04 : 0.02)} />
                 </g>
               )
+            }
             if (n.type === "image")
               return <image key={n.id} href={n.content.src} x={p.x} y={p.y} width={n.w} height={n.h} preserveAspectRatio="xMidYMid slice" />
             if (n.type === "note") return <rect key={n.id} x={p.x} y={p.y} width={n.w} height={n.h} rx={r} fill="var(--lemon)" />
             if (n.type === "link") return <rect key={n.id} x={p.x} y={p.y} width={n.w} height={n.h} rx={r} fill="var(--cobalt)" />
+            if (n.type === "arrow") {
+              const [a, b] = arrowEnds(n, p, (id) => {
+                const t = space.node(id)
+                if (!t || t.parentId !== n.parentId) return null
+                const tp = space.at(t)
+                return { x: tp.x, y: tp.y, w: t.w, h: t.h }
+              })
+              const st = styleOf(n)
+              const c = st.shape === "curved" ? curveControl(a, b, n.content.bend ?? undefined) : st.shape === "elbow" ? elbowCorner(a, b) : null
+              const sw = Math.max(bw, bh) * 0.006
+              return (
+                <path
+                  key={n.id}
+                  d={!c ? `M ${a.x} ${a.y} L ${b.x} ${b.y}` : st.shape === "elbow" ? `M ${a.x} ${a.y} L ${c.x} ${c.y} L ${b.x} ${b.y}` : `M ${a.x} ${a.y} Q ${c.x} ${c.y} ${b.x} ${b.y}`}
+                  fill="none"
+                  stroke="var(--ink)"
+                  strokeOpacity={0.55}
+                  strokeWidth={sw}
+                  strokeLinecap="round"
+                  strokeDasharray={st.line === "dotted" ? `0 ${sw * 2.4}` : undefined}
+                />
+              )
+            }
             return <rect key={n.id} x={p.x} y={p.y} width={n.w} height={n.h} rx={r} fill={TONE[fileKind(n.content.mime ?? "", n.content.title).tone] ?? "var(--lemon)"} />
           })}
           <g clipPath={`url(#mm-${focus})`}>

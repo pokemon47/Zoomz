@@ -1,6 +1,6 @@
 import { Mail } from "lucide-react"
 import { useState, type FormEvent } from "react"
-import { Link, useLocation } from "@/app/router"
+import { Link, navigate, useLocation } from "@/app/router"
 import { useSession } from "@/app/session"
 import { Button } from "@/components/zoomboard/Button"
 import { api } from "@/lib/http"
@@ -11,10 +11,10 @@ const ERRORS: Record<string, string> = {
 }
 
 export function LoginPage() {
-  const { config } = useSession()
+  const { config, guestExpired } = useSession()
   const { query } = useLocation()
   const next = query.get("next") ?? "/"
-  const [email, setEmail] = useState("")
+  const [email, setEmail] = useState(guestExpired?.email ?? "")
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle")
   const [error, setError] = useState(ERRORS[query.get("error") ?? ""] ?? "")
   const [devLink, setDevLink] = useState<string | null>(null)
@@ -42,7 +42,11 @@ export function LoginPage() {
           <i className="zb-mint" />
         </div>
         <h1 className="zb-login-title">Zoomz</h1>
-        <p>Moodboards you walk into. Sign in to make your own and share them.</p>
+        {guestExpired ? (
+          <p role="status">Your guest access has ended. Sign in to keep using Zoomz — your canvases are still here.</p>
+        ) : (
+          <p>Moodboards you walk into. Sign in to make your own and share them.</p>
+        )}
         {state === "sent" ? (
           <div className="zb-sent" role="status">
             <Mail size={22} strokeWidth={2.25} aria-hidden />
@@ -78,7 +82,7 @@ export function LoginPage() {
           </p>
         )}
         <p className="zb-fine">
-          <Link to="/demo">Try the demo board</Link> · <Link to="/terms">Terms</Link> · <Link to="/privacy">Privacy</Link>
+          <Link to="/demo">Try the demo canvas</Link> · <Link to="/terms">Terms</Link> · <Link to="/privacy">Privacy</Link>
         </p>
       </div>
     </main>
@@ -93,5 +97,44 @@ function GoogleMark() {
       <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
       <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
     </svg>
+  )
+}
+
+/** The page an emailed sign-in link opens. Signing in takes a click, so mail scanners that
+ *  open links can't use the link up first. */
+export function SignInConfirmPage({ token }: { token: string }) {
+  const { refresh } = useSession()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const go = async () => {
+    setBusy(true)
+    try {
+      const r = await api<{ next: string }>("/api/auth/verify", { json: { token } })
+      await refresh()
+      navigate(r.next || "/", { replace: true })
+    } catch (e) {
+      setError((e as Error).message)
+      setBusy(false)
+    }
+  }
+  return (
+    <main className="zb-page zb-page-center">
+      <div className="zb-panel zb-login">
+        <h1 className="zb-login-title">Sign in to Zoomz</h1>
+        {error ? (
+          <>
+            <p className="zb-error" role="alert">{error}</p>
+            <Button onClick={() => navigate("/login", { replace: true })}>Get a new link</Button>
+          </>
+        ) : (
+          <>
+            <p>You're one click away from your canvases.</p>
+            <Button variant="primary" autoFocus onClick={go} disabled={busy}>
+              {busy ? "Signing in…" : "Continue to Zoomz"}
+            </Button>
+          </>
+        )}
+      </div>
+    </main>
   )
 }

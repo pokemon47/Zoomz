@@ -15,7 +15,7 @@ export function StatePanel({ kind, title, message, onRetry }: StatePanelProps) {
       <div className={`zb-blob ${err ? "zb-tomato" : "zb-lemon zb-spin"}`} aria-hidden>
         {err ? "!" : "✦"}
       </div>
-      <h3>{title ?? (err ? "Couldn’t reach the board" : "Loading your board")}</h3>
+      <h3>{title ?? (err ? "Couldn’t reach the canvas" : "Loading your canvas")}</h3>
       <p>{message ?? (err ? "Check the server is running, then try again." : "Laying out the pieces…")}</p>
       {err && (
         <Button variant="primary" onClick={onRetry} autoFocus>

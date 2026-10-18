@@ -21,20 +21,32 @@ from .permissions import can_edit, role_at
 from .storage import file_url
 
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,64}$")
-TYPES = {"board", "image", "note", "file", "link"}
+TYPES = {"board", "image", "note", "file", "link", "arrow"}
 MAX_CHILDREN = 5000
 MAX_BATCH = 500
 
 # Content fields each node type may carry, with max string length.
 CONTENT_FIELDS: dict[str, dict[str, int]] = {
-    "board": {"title": 120, "description": 600},
+    "board": {"title": 120, "description": 600, "color": 16, "fill": 10},
     "image": {"title": 160, "alt": 600, "fileId": 32, "src": 300},
     # Notes have no practical length limit (the text shrinks to fit the note); this cap only
     # stops abuse — about 15,000 words.
-    "note": {"title": 120, "body": 100_000},
+    "note": {"title": 120, "body": 100_000, "color": 16, "fill": 10},
     "file": {"title": 255, "fileId": 32},
     "link": {"url": 2000, "title": 300, "description": 600, "image": 2000, "site": 120, "embed": 2000},
+    # An arrow between two points of its board; either end may be attached to another item
+    # on the same board (`from` / `to` are that item's id).
+    "arrow": {"from": 64, "to": 64, "shape": 10, "line": 10, "heads": 10},
 }
+#: Colours a note or board can take (unset = its usual look).
+CARD_COLORS = {"lemon", "white", "graphite", "tomato", "peach", "mint", "sky", "lilac", "pink"}
+#: How a coloured card is filled. Boards: just an outline in the colour, the colour in full (with
+#: a pastel surface), frosted glass, or clear. Notes: full colour or glass.
+FILLS = {"board": {"outline", "full", "glass", "clear"}, "note": {"full", "glass"}}
+#: Allowed values for arrow styles (unset = straight, solid, pointing at the end).
+ARROW_STYLES = {"shape": {"straight", "curved", "elbow"}, "line": {"solid", "dotted"}, "heads": {"end", "start", "both", "none"}}
+#: Numeric content fields: arrow end points, relative to the arrow's own x/y, in board units.
+NUM_FIELDS: dict[str, tuple[str, ...]] = {"arrow": ("x1", "y1", "x2", "y2", "bend")}
 DEFAULT_FRAME = {"x": 0, "y": 0, "w": 1300, "h": 1100}
 
 
@@ -124,6 +136,9 @@ def _clean_content(type_: str, content: Any, partial: bool) -> dict[str, Any]:
                 "h": _num(v.get("h", 1100), 200, 1e6, "frame.h"),
             }
             continue
+        if k in NUM_FIELDS.get(type_, ()):
+            out[k] = _num(v, -1e7, 1e7, k)
+            continue
         if k not in allowed:
             continue  # ignore derived fields clients echo back (src, thumbs, status…)
         if v is None:
@@ -135,6 +150,20 @@ def _clean_content(type_: str, content: Any, partial: bool) -> dict[str, Any]:
     if not partial and type_ == "board":
         out.setdefault("title", "Untitled board")
         out.setdefault("frame", dict(DEFAULT_FRAME))
+    if out.get("color") is not None and out["color"] not in CARD_COLORS:
+        raise OpError("unknown colour")
+    if out.get("fill") is not None and out["fill"] not in FILLS.get(type_, set()):
+        raise OpError(f"a {type_} can't be filled like that")
+    if type_ == "arrow":
+        for k, allowed_values in ARROW_STYLES.items():
+            if out.get(k) is not None and out[k] not in allowed_values:
+                raise OpError(f"arrow {k} must be one of: {', '.join(sorted(allowed_values))}")
+        for k in ("from", "to"):
+            if out.get(k) and not ID_RE.match(out[k]):
+                raise OpError("arrow ends must point at an item id")
+        if not partial:
+            for k, d in (("x1", 0.0), ("y1", 0.0), ("x2", 160.0), ("y2", 0.0)):
+                out.setdefault(k, d)
     if not partial and type_ == "note":
         out.setdefault("title", "Note")
         out.setdefault("body", "")
@@ -279,19 +308,27 @@ def _delete(ctx: Ctx, data: Any) -> None:
 HANDLERS = {"create": _create, "update": _update, "delete": _delete}
 
 
-def _reference_access(ctx: Ctx, content: dict) -> None:
-    for ref in content.get("references", []):
-        if ref.get("asset_id"):
-            file = ctx.db.get(StoredFile, ref["asset_id"])
-            if not file or file.space_id != ctx.space.id:
-                raise OpError("Source asset unavailable in this space", 403)
+def _flatten(ops: Any, depth: int = 0) -> Any:
+    """Batches may nest (an undo of several deletes is a batch of re-create batches)."""
+    if not isinstance(ops, list) or depth > 8:
+        return ops
+    out: list[Any] = []
+    for o in ops:
+        if isinstance(o, dict) and o.get("type") == "batch":
+            inner = _flatten(o.get("ops"), depth + 1)
+            if not isinstance(inner, list):
+                return None
+            out += inner
+        else:
+            out.append(o)
+    return out
 
 
-def apply(db: Session, space: Space, user: Optional[User], base_role: str, op: Any, *, commit: bool = True) -> dict[str, Any]:
+def apply(db: Session, space: Space, user: Optional[User], base_role: str, op: Any) -> dict[str, Any]:
     """Apply one operation (or a batch) atomically. Returns the broadcast message."""
     if not isinstance(op, dict) or op.get("type") not in (*HANDLERS, "batch"):
         raise OpError("unknown operation")
-    ops = op.get("ops") if op["type"] == "batch" else [op]
+    ops = _flatten(op.get("ops")) if op["type"] == "batch" else [op]
     if not isinstance(ops, list) or not ops or len(ops) > MAX_BATCH:
         raise OpError("a batch needs 1–500 operations")
     try:

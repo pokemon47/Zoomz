@@ -8,6 +8,8 @@ type Session = {
   user: User | null
   loading: boolean
   config: AuthConfig
+  /** Set when a guest's invite-only access ran out: they need to sign in normally. */
+  guestExpired: { email: string } | null
   refresh(): Promise<void>
   setUser(u: User): void
   signOut(): Promise<void>
@@ -18,13 +20,16 @@ const Ctx = createContext<Session | null>(null)
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [guestExpired, setGuestExpired] = useState<{ email: string } | null>(null)
   const [config, setConfig] = useState<AuthConfig>({ google: false, dev: false })
 
   const refresh = useCallback(async () => {
     try {
       setUser(await api<User>("/api/me"))
+      setGuestExpired(null)
     } catch (e) {
       if (!(e instanceof ApiError) || e.status !== 401) console.warn(e)
+      if (e instanceof ApiError && e.data?.reason === "guest_expired") setGuestExpired({ email: String(e.data.email ?? "") })
       setUser(null)
     } finally {
       setLoading(false)
@@ -41,7 +46,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
-  return <Ctx.Provider value={{ user, loading, config, refresh, setUser, signOut }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ user, loading, config, guestExpired, refresh, setUser, signOut }}>{children}</Ctx.Provider>
 }
 
 export function useSession(): Session {

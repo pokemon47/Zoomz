@@ -4,9 +4,12 @@ const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(
 
 export class ApiError extends Error {
   status: number
-  constructor(message: string, status: number) {
+  /** Structured details some errors carry, e.g. `{ reason: "mismatch", email }`. */
+  data: Record<string, unknown> | null
+  constructor(message: string, status: number, data: Record<string, unknown> | null = null) {
     super(message)
     this.status = status
+    this.data = data
   }
 }
 
@@ -16,14 +19,19 @@ export function apiUrl(path: string): string {
 
 async function errorFrom(res: Response): Promise<ApiError> {
   let message = `Something went wrong (${res.status}).`
+  let data: Record<string, unknown> | null = null
   try {
     const body = await res.json()
     if (typeof body?.detail === "string") message = body.detail
+    else if (body?.detail && typeof body.detail === "object" && !Array.isArray(body.detail)) {
+      data = body.detail
+      if (typeof body.detail.message === "string") message = body.detail.message
+    }
     else if (Array.isArray(body?.detail)) message = "Some of that didn't look right. Check it and try again."
   } catch {
     if (res.status >= 500) message = "The server had a problem. Try again in a moment."
   }
-  return new ApiError(message, res.status)
+  return new ApiError(message, res.status, data)
 }
 
 export async function api<T = unknown>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {

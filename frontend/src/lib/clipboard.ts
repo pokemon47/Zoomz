@@ -76,7 +76,12 @@ export async function pasteOps(clip: Clip, board: string, cx: number, cy: number
   const ops: Op[] = clip.nodes.map((n) => {
     const fid = (n.content as { fileId?: string }).fileId
     const copied = fid ? fileMap.get(fid) : undefined
-    const content = copied ? { ...n.content, ...copied, fileId: copied.id } : { ...n.content }
+    const content: Record<string, unknown> = copied ? { ...n.content, ...copied, fileId: copied.id } : { ...n.content }
+    if (n.type === "arrow") {
+      // Ends stay attached only to items that were copied along; others let go where they were.
+      content.from = n.content.from ? (ids.get(n.content.from) ?? null) : null
+      content.to = n.content.to ? (ids.get(n.content.to) ?? null) : null
+    }
     delete (content as Record<string, unknown>).id
     delete (content as Record<string, unknown>).filename
     const top = rootSet.has(n.id)

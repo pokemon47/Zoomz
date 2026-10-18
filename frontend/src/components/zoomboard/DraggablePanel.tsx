@@ -1,5 +1,5 @@
 import { GripVertical } from "lucide-react"
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
 type Corner = "tl" | "tr" | "bl" | "br"
@@ -15,13 +15,25 @@ type Props = {
   children: ReactNode
 }
 
-const KEY = (id: string) => `zoomz.panel.v2.${id}`
+// v3: the map moved to the bottom right, above the zoom controls; older saved spots start fresh.
+const KEY = (id: string) => `zoomz.panel.v3.${id}`
 const load = (id: string, fallback: Pos): Pos => {
   try {
     const v = JSON.parse(localStorage.getItem(KEY(id)) ?? "null") as Pos | null
     return v && typeof v.dx === "number" && typeof v.dy === "number" && v.corner ? v : fallback
   } catch {
     return fallback
+  }
+}
+
+const MARGIN = 8
+
+/** Where a panel of size w×h may sit in a W×H viewport: fully on screen with a small margin.
+ *  A panel bigger than the screen keeps its top-left (and its grip) visible. */
+export function clampToViewport(left: number, top: number, w: number, h: number, W: number, H: number) {
+  return {
+    left: Math.max(MARGIN, Math.min(left, W - w - MARGIN)),
+    top: Math.max(MARGIN, Math.min(top, H - h - MARGIN)),
   }
 }
 
@@ -55,11 +67,34 @@ export function DraggablePanel({ id, label, defaultPos, className, children }: P
     const el = ref.current!
     const W = window.innerWidth, H = window.innerHeight
     const w = el.offsetWidth, h = el.offsetHeight
-    const l = Math.min(Math.max(8, left), W - w - 8)
-    const t = Math.min(Math.max(8, top), H - h - 8)
+    const { left: l, top: t } = clampToViewport(left, top, w, h, W, H)
     const corner = `${t + h / 2 < H / 2 ? "t" : "b"}${l + w / 2 < W / 2 ? "l" : "r"}` as Corner
     setPos({ corner, dx: corner[1] === "l" ? l : W - l - w, dy: corner[0] === "t" ? t : H - t - h })
   }
+
+  // A remembered spot can be off screen after the window shrinks (or on a smaller display), or
+  // when the panel grows: pull it back in whenever any of that changes.
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const fix = () => {
+      if (drag.current) return
+      const r = el.getBoundingClientRect()
+      // Hidden (e.g. the map on a phone): nothing to measure, and its spot must not change.
+      if (!r.width || !r.height) return
+      const c = clampToViewport(r.left, r.top, r.width, r.height, window.innerWidth, window.innerHeight)
+      if (Math.abs(c.left - r.left) > 0.5 || Math.abs(c.top - r.top) > 0.5) settle(c.left, c.top)
+    }
+    fix()
+    window.addEventListener("resize", fix)
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(fix) : null
+    ro?.observe(el)
+    return () => {
+      window.removeEventListener("resize", fix)
+      ro?.disconnect()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const onDown = (e: PointerEvent<HTMLButtonElement>) => {
     if (e.button !== 0) return
@@ -76,7 +111,8 @@ export function DraggablePanel({ id, label, defaultPos, className, children }: P
   const onMove = (e: PointerEvent<HTMLButtonElement>) => {
     const d = drag.current
     if (!d) return
-    d.at = { left: d.left + e.clientX - d.px, top: d.top + e.clientY - d.py }
+    const el = ref.current!
+    d.at = clampToViewport(d.left + e.clientX - d.px, d.top + e.clientY - d.py, el.offsetWidth, el.offsetHeight, window.innerWidth, window.innerHeight)
     setLive(d.at)
   }
   const onUp = () => {

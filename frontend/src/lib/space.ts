@@ -12,8 +12,9 @@
 // as you approach, taller things grow faster and drift with the pointer, and things that
 // get too close fly past and fade, like walking through a room rather than scaling a picture.
 
+import { ARROW_PAD, arrowEnds, arrowPolyline } from "./arrows"
 import { lodFor, SPACE } from "./constants"
-import type { BoardNode, LOD, SceneNode } from "./types"
+import type { ArrowNode, BoardNode, LOD, SceneNode } from "./types"
 import type { SceneIndex } from "./scene"
 
 export type Cam = { b: string; x: number; y: number; s: number }
@@ -431,6 +432,14 @@ export function layout(space: Space, cam: Cam, vp: Viewport, pointer: Pointer, p
         if (reveal > 0) visit(n.id, space.toChild(c, n.id), level + 1, inherited * reveal)
         continue
       }
+      if (n.type === "arrow") {
+        // Lies on the floor; its ends may reach out to the items it's attached to.
+        const box = arrowBox(space, n, p)
+        const bx = box.x * c.s + c.x, by = box.y * c.s + c.y
+        if (bx > vp.w + margin || by > vp.h + margin || bx + box.w * c.s < -margin || by + box.h * c.s < -margin) continue
+        items.push({ node: n, level, x: baseX, y: baseY, scale: c.s, g: 1, opacity: inherited, lod: lodFor("arrow", n.w * c.s), reveal: 0, order: order++ })
+        continue
+      }
       // Raised things: perspective about the viewport centre plus pointer parallax.
       if (1 - ((n.z ?? 0) * c.s) / SPACE.eye <= SPACE.passDenom) continue // already behind the camera
       const { g, dx, dy } = lift(n.z ?? 0, c.s, pointer, parallax)
@@ -454,7 +463,22 @@ export function layout(space: Space, cam: Cam, vp: Viewport, pointer: Pointer, p
 /** Paint order of an item among its siblings: its rank, or a default by type. */
 export function layerOf(n: SceneNode): number {
   if (typeof n.rank === "number") return n.rank
-  return n.type === "board" ? 0 : n.type === "note" ? 2 : 1
+  return n.type === "board" ? 0 : n.type === "note" ? 2 : n.type === "arrow" ? 3 : 1
+}
+
+/** An arrow's reach on its board (local units), following any items its ends are attached to. */
+export function arrowBox(space: Space, n: ArrowNode, at: { x: number; y: number } = space.at(n)): Rect {
+  const [a, b] = arrowEnds(n, at, (id) => {
+    const t = space.node(id)
+    if (!t || t.parentId !== n.parentId) return null
+    const tp = space.at(t)
+    return { x: tp.x, y: tp.y, w: t.w, h: t.h }
+  })
+  // Curves and corners can reach past the two ends.
+  const pts = arrowPolyline(a, b, n.content.shape ?? "straight", n.content.bend ?? undefined)
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y)
+  const x0 = Math.min(...xs), y0 = Math.min(...ys)
+  return { x: x0 - ARROW_PAD, y: y0 - ARROW_PAD, w: Math.max(...xs) - x0 + ARROW_PAD * 2, h: Math.max(...ys) - y0 + ARROW_PAD * 2 }
 }
 
 /** Siblings bottom to top (stable, so equal layers keep their order). */

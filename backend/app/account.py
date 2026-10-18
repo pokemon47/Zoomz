@@ -6,6 +6,7 @@ import io
 import json
 import re
 import zipfile
+from datetime import timedelta
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -15,11 +16,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import mail
-from .auth import COOKIE, EMAIL_RE, require_user
+from .auth import COOKIE, EMAIL_RE, _aware, require_user
 from .config import settings
 from .db import get_db
-from .models import RANK, Node, Space, SpaceMember, StoredFile, User, Workspace, WorkspaceMember
+from .models import RANK, Invite, Node, Space, SpaceMember, StoredFile, User, Workspace, WorkspaceMember, now
 from .ratelimit import limit
+from .security import hash_token, new_token
 from .storage import delete_dir, path_for
 
 router = APIRouter(prefix="/api", tags=["account"])
@@ -75,6 +77,39 @@ def new_workspace(body: NewWorkspace, request: Request, user: User = Depends(req
     return {"id": ws.id, "name": ws.name, "personal": False, "role": "owner"}
 
 
+class WorkspacePatch(BaseModel):
+    name: str
+
+
+@router.patch("/workspaces/{ws_id}")
+def rename_workspace(ws_id: str, body: WorkspacePatch, user: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    ws = _ws(db, ws_id, user, "owner")
+    name = body.name.strip()[:80]
+    if not name:
+        raise HTTPException(422, "Give the workspace a name.")
+    ws.name = name
+    db.commit()
+    return {"id": ws.id, "name": ws.name, "personal": ws.personal, "role": "owner"}
+
+
+@router.delete("/workspaces/{ws_id}")
+def delete_workspace(ws_id: str, user: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    """Delete a workspace with every board and file in it, permanently. Owners only; your
+    Personal workspace stays (deleting your account removes it)."""
+    ws = _ws(db, ws_id, user, "owner")
+    if ws.personal:
+        raise HTTPException(409, "Your Personal workspace can't be deleted. You can rename it.")
+    space_ids = list(db.scalars(select(Space.id).where(Space.workspace_id == ws.id)))
+    db.delete(ws)
+    db.commit()  # cascades: members, invites, spaces → nodes, files, ops
+    from .live import hub
+
+    for sid in space_ids:
+        delete_dir(sid)
+        hub.publish(sid, {"t": "kicked", "reason": "This workspace was deleted."})
+    return {"ok": True}
+
+
 def _ws(db: Session, ws_id: str, user: User, need: str) -> Workspace:
     ws = db.get(Workspace, ws_id)
     wm = db.get(WorkspaceMember, (ws_id, user.id)) if ws else None
@@ -93,6 +128,9 @@ def ws_members(ws_id: str, user: User = Depends(require_user), db: Session = Dep
         u = db.get(User, wm.user_id)
         if u:
             out.append({"userId": u.id, "email": u.email, "name": u.name, "color": u.color, "role": wm.role})
+    for inv in db.scalars(select(Invite).where(Invite.workspace_id == ws_id, Invite.accepted_at.is_(None))):
+        if _aware(inv.expires_at) > now():
+            out.append({"inviteId": inv.id, "email": inv.email, "role": inv.role, "pending": True})
     return out
 
 
@@ -103,6 +141,8 @@ class WsMemberIn(BaseModel):
 
 @router.post("/workspaces/{ws_id}/members")
 def add_ws_member(ws_id: str, body: WsMemberIn, request: Request, user: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    """Invite someone to every board in a workspace. They get an email with a one-click link
+    that signs them in (see /api/invites/{token}/redeem); access starts when they use it."""
     ws = _ws(db, ws_id, user, "owner")
     if ws.personal:
         raise HTTPException(409, "Your personal workspace is just for you. Create a team workspace to work with others.")
@@ -110,22 +150,31 @@ def add_ws_member(ws_id: str, body: WsMemberIn, request: Request, user: User = D
     if not EMAIL_RE.match(email) or body.role not in ("viewer", "editor", "owner"):
         raise HTTPException(422, "Use a valid email and a role of viewer, editor or owner.")
     limit(request, "ws-invite", 30, 15, key=user.id)
-    from .auth import get_or_create_user
-
-    target, created = get_or_create_user(db, email)
-    wm = db.get(WorkspaceMember, (ws.id, target.id))
-    if wm:
-        wm.role = body.role
-    else:
-        db.add(WorkspaceMember(workspace_id=ws.id, user_id=target.id, role=body.role))
+    token = new_token()
+    inv = Invite(workspace_id=ws.id, email=email, role=body.role, token_hash=hash_token(token), invited_by=user.id, expires_at=now() + timedelta(days=settings.invite_days))
+    db.add(inv)
+    link = f"{settings.public_url}/invite/{token}"
     mail.send(
         email,
         f"{user.name} added you to {ws.name} on Zoomz",
-        f"{user.name} ({user.email}) added you to the workspace “{ws.name}”. Sign in with this email address to see its boards.",
-        ("Open Zoomz", f"{settings.public_url}/login"),
+        f"{user.name} ({user.email}) invited you to the workspace “{ws.name}”. You'll be able to {'view' if body.role == 'viewer' else 'edit'} all of its boards.",
+        ("Open Zoomz", link),
     )
     db.commit()
-    return {"userId": target.id, "email": target.email, "name": target.name, "color": target.color, "role": body.role}
+    out = {"id": inv.id, "email": email, "role": body.role, "pending": True}
+    if settings.dev and not settings.smtp_host:
+        out["devLink"] = link
+    return out
+
+
+@router.delete("/workspaces/{ws_id}/invites/{invite_id}")
+def revoke_ws_invite(ws_id: str, invite_id: str, user: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    ws = _ws(db, ws_id, user, "owner")
+    inv = db.get(Invite, invite_id)
+    if inv and inv.workspace_id == ws.id:
+        db.delete(inv)
+        db.commit()
+    return {"ok": True}
 
 
 @router.delete("/workspaces/{ws_id}/members/{user_id}")
@@ -137,6 +186,11 @@ def remove_ws_member(ws_id: str, user_id: str, user: User = Depends(require_user
     if wm:
         db.delete(wm)
         db.commit()
+    from .live import hub
+
+    # Anyone who loses access is disconnected from the workspace's boards right away.
+    for sid in db.scalars(select(Space.id).where(Space.workspace_id == ws.id)):
+        hub.kick_user(sid, user_id)
     return {"ok": True}
 
 
