@@ -1,4 +1,4 @@
-import { Captions, CaptionsOff, Maximize, Minus, PanelTop, PanelTopDashed, Plus } from "lucide-react"
+import { Captions, CaptionsOff, Home, Maximize, Minus, PanelTop, PanelTopDashed, Plus } from "lucide-react"
 import type { Labels } from "@/lib/labels"
 import { Button } from "./Button"
 import { IconButton } from "./IconButton"
@@ -9,13 +9,15 @@ export type ZoomControlsProps = {
   onZoomIn(): void
   onZoomOut(): void
   onFit(): void
+  /** Back out to the top level and show the whole canvas. */
+  onWhole?(): void
   /** Which labels are showing; omitted hides the two toggles. */
   labels?: Labels
   onToggleLabels?(which: keyof Labels): void
 }
 
 /** Floating zoom pill, bottom-right. */
-export function ZoomControls({ readout, onZoomIn, onZoomOut, onFit, labels, onToggleLabels }: ZoomControlsProps) {
+export function ZoomControls({ readout, onZoomIn, onZoomOut, onFit, onWhole, labels, onToggleLabels }: ZoomControlsProps) {
   return (
     <div className="zb-zoom" role="group" aria-label="Zoom">
       <IconButton label="Zoom out" shortcut="−" onClick={onZoomOut}>
@@ -31,6 +33,11 @@ export function ZoomControls({ readout, onZoomIn, onZoomOut, onFit, labels, onTo
         <Maximize size={16} strokeWidth={2.25} aria-hidden />
         Fit board
       </Button>
+      {onWhole && (
+        <IconButton label="Whole canvas" shortcut="⇧0" onClick={onWhole}>
+          <Home strokeWidth={2.25} />
+        </IconButton>
+      )}
       {labels && onToggleLabels && (
         <>
           <span className="zb-zoom-sep" aria-hidden />

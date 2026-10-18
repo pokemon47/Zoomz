@@ -1254,6 +1254,7 @@ export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToa
       else if (k === "l") toggleLabels(e.shiftKey ? "boards" : "photos")
       else if (e.key === "+" || e.key === "=") zoomCentre(ZOOM.step)
       else if (e.key === "-" || e.key === "_") zoomCentre(1 / ZOOM.step)
+      else if (e.code === "Digit0" && e.shiftKey) fitBoard(space.rootId)
       else if (e.key === "0") fitBoard(lay.focus)
       else if (t?.closest("button, nav")) return
       else if (e.key.startsWith("Arrow")) {
@@ -1479,7 +1480,7 @@ export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToa
       <DraggablePanel id="zoom" label="the zoom controls" defaultPos={{ corner: "br", dx: 16, dy: 16 }}>
         <div className="zb-panel-stack">
           <LevelBadge depth={focusDepth} />
-          <ZoomControls readout={readout} onZoomIn={() => zoomCentre(ZOOM.step)} onZoomOut={() => zoomCentre(1 / ZOOM.step)} onFit={() => fitBoard(lay.focus)} labels={labels} onToggleLabels={toggleLabels} />
+          <ZoomControls readout={readout} onZoomIn={() => zoomCentre(ZOOM.step)} onZoomOut={() => zoomCentre(1 / ZOOM.step)} onFit={() => fitBoard(lay.focus)} onWhole={() => fitBoard(space.rootId)} labels={labels} onToggleLabels={toggleLabels} />
         </div>
       </DraggablePanel>
       <DraggablePanel id="minimap" label="the map" defaultPos={{ corner: "bl", dx: 16, dy: 16 }} className={`zb-minimap-panel${mapHidden ? " is-collapsed" : ""}`}>
