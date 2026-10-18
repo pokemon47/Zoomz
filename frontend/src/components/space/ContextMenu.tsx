@@ -1,8 +1,9 @@
-import { ArrowDownToLine, ArrowUpToLine, ChevronDown, ChevronRight, ChevronUp, Download, Layers, Pencil, Trash2 } from "lucide-react"
+import { ArrowDownToLine, ArrowUpToLine, ChevronDown, ChevronRight, ChevronUp, Download, Layers, Palette, Pencil, Trash2 } from "lucide-react"
+import { ColorSwatches } from "@/components/zoomboard/ColorSwatches"
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import type { LayerMove } from "@/lib/layers"
 
-export type ContextAction = { kind: "edit" } | { kind: "delete" } | { kind: "export" } | { kind: "layer"; move: LayerMove }
+export type ContextAction = { kind: "edit" } | { kind: "delete" } | { kind: "export" } | { kind: "layer"; move: LayerMove } | { kind: "color"; color: string | null }
 
 type Props = {
   x: number
@@ -13,6 +14,8 @@ type Props = {
   canRename?: boolean
   /** Which layer moves would change anything (front/forward disabled when already on top…). */
   layerable: Record<LayerMove, boolean>
+  /** Notes and boards: their colour now (boards may have none). */
+  colorable?: { value: string | null; plain: boolean }
   /** Offer "Export as zip" (boards, when saved on the server). */
   exportable?: boolean
   onAction(a: ContextAction): void
@@ -22,7 +25,7 @@ type Props = {
 const MOD = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+"
 
 /** Right-click menu for a card: Edit, Layer ▸, Delete. Keyboard: arrows, → opens Layer, Esc closes. */
-export function ContextMenu({ x, y, title, canEdit, canRename = true, layerable, exportable, onAction, onClose }: Props) {
+export function ContextMenu({ x, y, title, canEdit, canRename = true, layerable, exportable, colorable, onAction, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [sub, setSub] = useState(false)
   const [pos, setPos] = useState({ x, y })
@@ -138,6 +141,14 @@ export function ContextMenu({ x, y, title, canEdit, canRename = true, layerable,
           </div>
         )}
       </div>
+      {colorable && canEdit && (
+        <div className="zb-ctx-colors" role="group" aria-label="Colour">
+          <span className="zb-ctx-label">
+            <Palette aria-hidden /> Colour
+          </span>
+          <ColorSwatches value={colorable.value} plain={colorable.plain} size={22} onChange={(color) => act({ kind: "color", color })} />
+        </div>
+      )}
       {exportable && <Item icon={<Download />} label="Export as zip" onClick={() => act({ kind: "export" })} />}
       <div className="zb-ctx-sep" role="separator" />
       <Item icon={<Trash2 />} label="Delete" hint="⌫" danger disabled={!canEdit} onClick={() => act({ kind: "delete" })} />

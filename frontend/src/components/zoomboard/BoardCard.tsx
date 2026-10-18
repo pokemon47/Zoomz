@@ -1,6 +1,7 @@
 import { motion } from "motion/react"
 import { GripHorizontal } from "lucide-react"
-import { memo, useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from "react"
+import { memo, useEffect, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent } from "react"
+import { colorById } from "@/lib/colors"
 import { MOTION, STACK } from "@/lib/constants"
 import type { LOD } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -25,6 +26,8 @@ export type BoardCardProps = {
   editable?: boolean
   /** Being edited in place: which field has the caret. */
   editing?: BoardField | null
+  /** One of the card colours (lib/colors): the board's rim, label and the stack under it. */
+  color?: string | null
   /** Editing finished: the new title and description. */
   onDone?(next: { title: string; description: string }): void
 }
@@ -49,10 +52,11 @@ function StackLayer({ index, fanned, colour }: { index: 0 | 1; fanned: boolean; 
  * level inside, and its contents are drawn on it by the space. The stack underneath
  * shows there is depth to fall into. Grab the title strip to move the whole board.
  */
-export const BoardCard = memo(function BoardCard({ title, description, count, lod, selected, tactile, reduced, innerFloor, innerDot, dropTarget, editable, editing, onDone }: BoardCardProps) {
+export const BoardCard = memo(function BoardCard({ title, description, count, lod, selected, tactile, reduced, innerFloor, innerDot, dropTarget, editable, editing, onDone, color }: BoardCardProps) {
   const fanned = !reduced && (tactile === "hover" || tactile === "drag")
+  const c = colorById(color)
   return (
-    <div className="zb-board-wrap">
+    <div className={cn("zb-board-wrap", c && "is-tinted")} style={c ? ({ ["--tint" as string]: c.face, ["--tint-side" as string]: c.side, ["--tint-ink" as string]: c.ink } as CSSProperties) : undefined}>
       <StackLayer index={1} fanned={fanned} colour="zb-mint" />
       <StackLayer index={0} fanned={fanned} colour="zb-lilac" />
       <div

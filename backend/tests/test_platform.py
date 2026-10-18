@@ -738,3 +738,17 @@ def test_arrow_styles(make_client):
     assert r.status_code == 200 and {k: r.json()["changes"][0]["node"]["content"][k] for k in ("shape", "line", "heads")} == {"shape": "curved", "line": "dotted", "heads": "both"}
     assert op(c, sid, {"type": "update", "id": aid, "patch": {"content": {"heads": "none", "shape": "elbow", "bend": 0.6}}}).status_code == 200
     assert op(c, sid, {"type": "update", "id": aid, "patch": {"content": {"shape": "zigzag"}}}).status_code == 400
+
+
+def test_note_and_board_colours(make_client):
+    c = make_client("colours@example.com")
+    sid = first_space(c)["id"]
+    root = scene(c, sid)["rootBoardId"]
+    nid, bid = uid("note"), uid("board")
+    assert op(c, sid, {"type": "create", "node": {"id": nid, "type": "note", "parentId": root, "content": {"title": "", "body": "x", "color": "graphite"}}}).status_code == 200
+    assert op(c, sid, {"type": "create", "node": {"id": bid, "type": "board", "parentId": root, "content": {"title": "B", "color": "white"}}}).status_code == 200
+    assert op(c, sid, {"type": "update", "id": nid, "patch": {"content": {"color": "mint"}}}).status_code == 200
+    assert op(c, sid, {"type": "update", "id": bid, "patch": {"content": {"color": None}}}).status_code == 200
+    assert op(c, sid, {"type": "update", "id": nid, "patch": {"content": {"color": "plaid"}}}).status_code == 400
+    nodes = {n["id"]: n for n in scene(c, sid)["nodes"]}
+    assert nodes[nid]["content"]["color"] == "mint" and nodes[bid]["content"].get("color") is None

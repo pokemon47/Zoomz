@@ -36,7 +36,7 @@ export type Frame = { x: number; y: number; w: number; h: number }
 
 export type BoardNode = BaseNode & {
   type: "board"
-  content: { title: string; description?: string | null; frame?: Frame }
+  content: { title: string; description?: string | null; frame?: Frame; color?: string | null }
 }
 
 export type ImageNode = BaseNode & {
@@ -46,7 +46,7 @@ export type ImageNode = BaseNode & {
 
 export type NoteNode = BaseNode & {
   type: "note"
-  content: { title: string; body: string }
+  content: { title: string; body: string; color?: string | null }
 }
 
 /** Any other uploaded file (PDF, video, document…). */

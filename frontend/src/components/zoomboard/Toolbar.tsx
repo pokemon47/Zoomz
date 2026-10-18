@@ -1,64 +1,83 @@
 import { createPortal } from "react-dom"
-import { ImagePlus, LayoutGrid, MoveUpRight, StickyNote } from "lucide-react"
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react"
+import { ImagePlus, LayoutGrid, StickyNote } from "lucide-react"
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { DEFAULT_ARROW } from "@/lib/arrows"
+import { colorById } from "@/lib/colors"
 import type { ArrowStyle } from "@/lib/types"
 import { ArrowGlyph, ArrowStyleControls } from "./ArrowStyle"
+import { ColorSwatches } from "./ColorSwatches"
 
 export type ToolKind = "note" | "board" | "arrow"
+/** What a new item looks like: an arrow's style, or a note's / board's colour. */
+export type ToolLook = { arrow: ArrowStyle; note: string | null; board: string | null }
 
 type Props = {
   /** Put a new item down: at a screen point (client px) when dropped, else in the middle of the view. */
-  onPlace(kind: ToolKind, at: { x: number; y: number } | null, arrow?: ArrowStyle): void
+  onPlace(kind: ToolKind, at: { x: number; y: number } | null, look: ToolLook): void
   onFiles(files: File[]): void
 }
 
-const TOOLS: { kind: ToolKind; label: string; key: string; icon: ReactNode }[] = [
-  { kind: "note", label: "Note", key: "N", icon: <StickyNote strokeWidth={2.25} /> },
-  { kind: "board", label: "Board", key: "B", icon: <LayoutGrid strokeWidth={2.25} /> },
-  { kind: "arrow", label: "Arrow", key: "A", icon: <MoveUpRight strokeWidth={2.25} /> },
-]
+const LABEL: Record<ToolKind, { name: string; key: string; menu: string }> = {
+  note: { name: "Note", key: "N", menu: "Note colour" },
+  board: { name: "Board", key: "B", menu: "Board colour" },
+  arrow: { name: "Arrow", key: "A", menu: "Arrow styles" },
+}
 
-const STYLE_KEY = "zoomz.arrowStyle"
-function loadStyle(): ArrowStyle {
-  try {
-    return { ...DEFAULT_ARROW, ...(JSON.parse(localStorage.getItem(STYLE_KEY) ?? "{}") as Partial<ArrowStyle>) }
-  } catch {
-    return DEFAULT_ARROW
+const LOOK_KEY = { arrow: "zoomz.arrowStyle", note: "zoomz.noteColor", board: "zoomz.boardColor" }
+
+/** The look last picked in the toolbar (the N / B / A keys use it too). */
+export function lastLook(): ToolLook {
+  const read = (k: string) => {
+    try {
+      return localStorage.getItem(k)
+    } catch {
+      return null
+    }
   }
+  let arrow = DEFAULT_ARROW
+  try {
+    arrow = { ...DEFAULT_ARROW, ...(JSON.parse(read(LOOK_KEY.arrow) ?? "{}") as Partial<ArrowStyle>) }
+  } catch {
+    /* keep the default */
+  }
+  const note = read(LOOK_KEY.note)
+  const board = read(LOOK_KEY.board)
+  return { arrow, note: colorById(note) ? note : null, board: colorById(board) ? board : null }
 }
 
 /**
- * A slim rail of things you can drag onto the canvas. Drag one out and it lands exactly where
- * you let go; click a note or board (or press its key) and it lands in the middle of the view.
- * Clicking the arrow opens its styles (curved, dotted, direction); drag the arrow from there.
+ * A slim rail of things you can drag onto the canvas; each lands exactly where you let go.
+ * Clicking a tool opens its options (a note's or board's colour, an arrow's style) with a
+ * preview you can drag out or click to place in the middle of the view. Dragging the tool
+ * itself uses whatever was picked last.
  */
 export function Toolbar({ onPlace, onFiles }: Props) {
   const input = useRef<HTMLInputElement>(null)
   const drag = useRef<{ kind: ToolKind; sx: number; sy: number; moved: boolean } | null>(null)
   const [ghost, setGhost] = useState<{ kind: ToolKind; x: number; y: number } | null>(null)
-  const [arrowStyle, setArrowStyle] = useState<ArrowStyle>(loadStyle)
-  const [arrowOpen, setArrowOpen] = useState(false)
+  const [look, setLook] = useState<ToolLook>(lastLook)
+  const [open, setOpen] = useState<ToolKind | null>(null)
   const flyout = useRef<HTMLDivElement>(null)
-  const arrowBtn = useRef<HTMLButtonElement>(null)
+  const buttons = useRef<Record<ToolKind, HTMLButtonElement | null>>({ note: null, board: null, arrow: null })
 
-  const chooseStyle = (s: ArrowStyle) => {
-    setArrowStyle(s)
+  const choose = <K extends ToolKind>(kind: K, value: ToolLook[K]) => {
+    setLook((l) => ({ ...l, [kind]: value }))
     try {
-      localStorage.setItem(STYLE_KEY, JSON.stringify(s))
+      if (value === null) localStorage.removeItem(LOOK_KEY[kind])
+      else localStorage.setItem(LOOK_KEY[kind], typeof value === "string" ? value : JSON.stringify(value))
     } catch {
       /* private mode */
     }
   }
 
-  // Beside the arrow button, kept inside the window.
+  // Beside its tool, kept inside the window.
   const [flyPos, setFlyPos] = useState<{ left: number; top: number } | null>(null)
   useLayoutEffect(() => {
-    if (!arrowOpen) return setFlyPos(null)
+    if (!open) return setFlyPos(null)
     const place = () => {
-      const b = arrowBtn.current?.getBoundingClientRect()
-      const bar = arrowBtn.current?.closest(".zb-toolbar")?.getBoundingClientRect()
+      const b = buttons.current[open]?.getBoundingClientRect()
+      const bar = buttons.current[open]?.closest(".zb-toolbar")?.getBoundingClientRect()
       const f = flyout.current
       if (!b || !bar || !f) return
       const h = f.offsetHeight, w = f.offsetWidth
@@ -70,23 +89,23 @@ export function Toolbar({ onPlace, onFiles }: Props) {
     place()
     window.addEventListener("resize", place)
     return () => window.removeEventListener("resize", place)
-  }, [arrowOpen])
+  }, [open])
 
-  // The arrow options close when you click elsewhere or press Escape.
+  // The menu closes when you click elsewhere or press Escape.
   useEffect(() => {
-    if (!arrowOpen) return
+    if (!open) return
     const away = (e: globalThis.PointerEvent) => {
       const t = e.target as Node
-      if (!flyout.current?.contains(t) && !arrowBtn.current?.contains(t)) setArrowOpen(false)
+      if (!flyout.current?.contains(t) && !buttons.current[open]?.contains(t)) setOpen(null)
     }
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setArrowOpen(false)
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(null)
     document.addEventListener("pointerdown", away, true)
     document.addEventListener("keydown", esc)
     return () => {
       document.removeEventListener("pointerdown", away, true)
       document.removeEventListener("keydown", esc)
     }
-  }, [arrowOpen])
+  }, [open])
 
   const down = (kind: ToolKind) => (e: PointerEvent<HTMLElement>) => {
     if (e.button !== 0) return
@@ -100,53 +119,67 @@ export function Toolbar({ onPlace, onFiles }: Props) {
     d.moved = true
     setGhost({ kind: d.kind, x: e.clientX, y: e.clientY })
   }
-  const up = (fromFlyout: boolean) => (e: PointerEvent<HTMLElement>) => {
+  const up = (fromMenu: boolean) => (e: PointerEvent<HTMLElement>) => {
     const d = drag.current
     drag.current = null
     setGhost(null)
     if (!d) return
     if (!d.moved) {
-      // A click: notes and boards go in the middle; the arrow opens (or, in its menu, places).
-      if (d.kind === "arrow" && !fromFlyout) return setArrowOpen((o) => !o)
-      if (d.kind === "arrow") setArrowOpen(false)
-      return onPlace(d.kind, null, arrowStyle)
+      // A click on a tool opens (or closes) its options; a click on the preview places it.
+      if (!fromMenu) return setOpen((o) => (o === d.kind ? null : d.kind))
+      setOpen(null)
+      return onPlace(d.kind, null, look)
     }
     // Only drops on the canvas count (not back on the toolbar or on other controls).
     const under = document.elementFromPoint(e.clientX, e.clientY)
     if (under?.closest(".zb-viewport")) {
-      onPlace(d.kind, { x: e.clientX, y: e.clientY }, arrowStyle)
-      if (d.kind === "arrow") setArrowOpen(false)
+      onPlace(d.kind, { x: e.clientX, y: e.clientY }, look)
+      setOpen(null)
     }
   }
   const cancel = () => {
     drag.current = null
     setGhost(null)
   }
-  const dragProps = (kind: ToolKind, fromFlyout = false) => ({ onPointerDown: down(kind), onPointerMove: move, onPointerUp: up(fromFlyout), onPointerCancel: cancel })
+  const dragProps = (kind: ToolKind, fromMenu = false) => ({ onPointerDown: down(kind), onPointerMove: move, onPointerUp: up(fromMenu), onPointerCancel: cancel })
+
+  const icon = (kind: ToolKind) => {
+    if (kind === "arrow") return <ArrowGlyph style={look.arrow} width={24} height={16} strokeWidth={2} headFactor={2.4} />
+    const c = colorById(look[kind])
+    const Icon = kind === "note" ? StickyNote : LayoutGrid
+    return (
+      <span className="zb-tool-icon">
+        <Icon strokeWidth={2.25} />
+        {c && <i className="zb-tool-dot" style={{ background: c.face, boxShadow: `0 0 0 1.5px ${c.side}` }} />}
+      </span>
+    )
+  }
 
   return (
     <>
       <div className="zb-toolbar" role="toolbar" aria-orientation="vertical" aria-label="Add to the canvas" data-no-drag>
-        {TOOLS.map((t) => (
-          <Tooltip key={t.kind} disabled={t.kind === "arrow" && arrowOpen}>
+        {(["note", "board", "arrow"] as ToolKind[]).map((kind) => (
+          <Tooltip key={kind} disabled={open === kind}>
             <TooltipTrigger
               render={
                 <button
-                  ref={t.kind === "arrow" ? arrowBtn : undefined}
+                  ref={(el) => {
+                    buttons.current[kind] = el
+                  }}
                   type="button"
-                  className={`zb-tool${ghost?.kind === t.kind ? " is-dragging" : ""}${t.kind === "arrow" && arrowOpen ? " is-open" : ""}`}
-                  aria-label={t.kind === "arrow" ? "Arrow — click for styles, or drag onto the canvas" : `${t.label} — drag onto the canvas, or press ${t.key}`}
-                  aria-expanded={t.kind === "arrow" ? arrowOpen : undefined}
-                  {...dragProps(t.kind)}
+                  className={`zb-tool${ghost?.kind === kind ? " is-dragging" : ""}${open === kind ? " is-open" : ""}`}
+                  aria-label={`${LABEL[kind].name} — click for ${kind === "arrow" ? "styles" : "colours"}, or drag onto the canvas`}
+                  aria-expanded={open === kind}
+                  {...dragProps(kind)}
                   // Pointer clicks are handled on pointer up; this is Enter / Space.
-                  onClick={(e) => e.detail === 0 && (t.kind === "arrow" ? setArrowOpen((o) => !o) : onPlace(t.kind, null))}
+                  onClick={(e) => e.detail === 0 && setOpen((o) => (o === kind ? null : kind))}
                 />
               }
             >
-              {t.kind === "arrow" ? <ArrowGlyph style={arrowStyle} width={24} height={16} strokeWidth={2} headFactor={2.4} /> : t.icon}
+              {icon(kind)}
             </TooltipTrigger>
             <TooltipContent className="zb-tip" side="right" sideOffset={10}>
-              {t.kind === "arrow" ? "Arrow — click for styles" : t.label} <kbd>{t.key}</kbd>
+              {LABEL[kind].name} — click for {kind === "arrow" ? "styles" : "colours"} <kbd>{LABEL[kind].key}</kbd>
             </TooltipContent>
           </Tooltip>
         ))}
@@ -170,23 +203,51 @@ export function Toolbar({ onPlace, onFiles }: Props) {
             e.target.value = ""
           }}
         />
-        {arrowOpen &&
+        {open &&
           createPortal(
-          <div ref={flyout} className={`zb-arrow-flyout${ghost?.kind === "arrow" ? " is-carrying" : ""}`} role="dialog" aria-label="Arrow styles" style={flyPos ?? { visibility: "hidden" }}>
-            <ArrowStyleControls value={arrowStyle} onChange={chooseStyle} />
-            <button type="button" className={`zb-arrow-drag${ghost?.kind === "arrow" ? " is-dragging" : ""}`} aria-label="Drag this arrow onto the canvas (or click to add it in the middle)" {...dragProps("arrow", true)}>
-              <ArrowGlyph style={arrowStyle} width={64} height={26} strokeWidth={2.5} />
-              <span>Drag onto the canvas</span>
-            </button>
-          </div>,
-          document.body,
-        )}
+            <div
+              ref={flyout}
+              className={`zb-arrow-flyout${ghost?.kind === open ? " is-carrying" : ""}`}
+              role="dialog"
+              aria-label={LABEL[open].menu}
+              style={flyPos ?? { visibility: "hidden" }}
+            >
+              {open === "arrow" ? (
+                <ArrowStyleControls value={look.arrow} onChange={(s) => choose("arrow", s)} />
+              ) : (
+                <ColorSwatches value={look[open] ?? (open === "note" ? "lemon" : null)} plain={open === "board"} onChange={(c) => choose(open, c === "lemon" && open === "note" ? null : c)} />
+              )}
+              <button
+                type="button"
+                className={`zb-arrow-drag${ghost?.kind === open ? " is-dragging" : ""}`}
+                aria-label={`Drag this ${LABEL[open].name.toLowerCase()} onto the canvas (or click to add it in the middle)`}
+                {...dragProps(open, true)}
+              >
+                <Preview kind={open} look={look} />
+                <span>Drag onto the canvas</span>
+              </button>
+            </div>,
+            document.body,
+          )}
       </div>
       {ghost && (
-        <div className={`zb-tool-ghost is-${ghost.kind}`} style={{ left: ghost.x, top: ghost.y }} aria-hidden>
-          {ghost.kind === "arrow" ? <ArrowGlyph style={arrowStyle} width={120} height={40} strokeWidth={3} /> : null}
+        <div className={`zb-tool-ghost is-${ghost.kind}`} style={{ left: ghost.x, top: ghost.y, ...lookStyle(ghost.kind, look) }} aria-hidden>
+          {ghost.kind === "arrow" ? <ArrowGlyph style={look.arrow} width={120} height={40} strokeWidth={3} /> : null}
         </div>
       )}
     </>
   )
+}
+
+/** Colours for the ghost / preview of a note or board. */
+function lookStyle(kind: ToolKind, look: ToolLook): CSSProperties {
+  if (kind === "arrow") return {}
+  const c = colorById(look[kind])
+  if (!c) return {}
+  return kind === "note" ? { background: c.face, boxShadow: `0 5px 0 0 ${c.side}, 0 16px 24px -10px rgba(0, 0, 0, 0.3)` } : { boxShadow: `inset 0 0 0 4px ${c.face}, 6px 7px 0 0 ${c.face}, 12px 14px 0 0 ${c.side}, 0 18px 26px -12px rgba(0, 0, 0, 0.3)` }
+}
+
+function Preview({ kind, look }: { kind: ToolKind; look: ToolLook }) {
+  if (kind === "arrow") return <ArrowGlyph style={look.arrow} width={64} height={26} strokeWidth={2.5} />
+  return <span className={`zb-tool-preview is-${kind}`} style={lookStyle(kind, look)} />
 }

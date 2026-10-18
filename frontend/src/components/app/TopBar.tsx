@@ -14,7 +14,7 @@ export function Avatar({ name, color, avatar, size = 32, ring }: { name: string;
 }
 
 /** The app's top bar (home, search, you). Board pages pass extra controls as children. */
-export function TopBar({ children, onSearch, tools }: { children?: ReactNode; onSearch?(): void; tools?: ReactNode }) {
+export function TopBar({ children, onSearch, tools, actions }: { children?: ReactNode; onSearch?(): void; tools?: ReactNode; actions?: ReactNode }) {
   const { user, signOut } = useSession()
   return (
     <header className="zb-topbar">
@@ -35,6 +35,7 @@ export function TopBar({ children, onSearch, tools }: { children?: ReactNode; on
           <kbd>⌘K</kbd>
         </button>
       )}
+      {actions}
       {user ? <UserMenu user={user} onSignOut={signOut} /> : <Link to={`/login?next=${encodeURIComponent(location.pathname)}`} className="zb-btn zb-btn-primary zb-btn-sm">Sign in</Link>}
     </header>
   )

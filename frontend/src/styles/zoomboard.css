@@ -1010,3 +1010,38 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
 }
 .zb-arrow-bend:hover { scale: 1.25; }
 .zb-arrow-bend:active { cursor: grabbing; }
+
+/* ---------- note & board colours ---------- */
+.zb-note.is-graphite::before { background: rgba(255, 255, 255, 0.22); }
+.zb-note.is-graphite .zb-note-empty, .zb-note.is-graphite .zb-note-edit ::placeholder { color: rgba(247, 242, 234, 0.45); }
+/* A coloured board: the stack under it and a rim around its face take the colour; the face itself
+   stays the floor you step onto, so walking into it still looks seamless. */
+.zb-board-wrap.is-tinted .zb-layer { background: var(--tint); --side: var(--tint-side); }
+.zb-board-wrap.is-tinted .zb-layer.zb-lilac { filter: brightness(1.06); }
+.zb-board-wrap.is-tinted .zb-board { box-shadow: 0 8px 0 0 var(--tint-side), inset 0 0 0 calc(5px / max(var(--s, 1), 0.2)) var(--tint); }
+.zb-board-wrap.is-tinted .zb-board.zb-far .zb-inner-title { background: var(--tint); color: var(--tint-ink); box-shadow: 0 0.12em 0 0 var(--tint-side); }
+.zb-colors { display: grid; grid-template-columns: repeat(5, auto); gap: 6px; justify-content: start; }
+.zb-color { border: 0; padding: 0; border-radius: 50%; cursor: pointer; display: grid; place-items: center; color: var(--ink-muted); background: var(--surface-sunk); transition: transform 180ms var(--zb-spring); }
+.zb-color:hover { transform: scale(1.12); }
+.zb-color[aria-checked="true"] { outline: 2.5px solid var(--cobalt); outline-offset: 2px; }
+.zb-color:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 2px; }
+.zb-tool-icon { position: relative; display: grid; place-items: center; }
+.zb-tool-icon svg { width: 19px; height: 19px; }
+.zb-tool-dot { position: absolute; right: -4px; bottom: -3px; width: 9px; height: 9px; border-radius: 50%; }
+.zb-tool-preview { display: block; flex: none; }
+.zb-tool-preview.is-note { width: 44px; height: 38px; border-radius: 6px; background: var(--lemon); box-shadow: 0 3px 0 0 var(--lemon-side); transform: rotate(-2deg); }
+.zb-tool-preview.is-board { width: 52px; height: 42px; border-radius: 8px; background: var(--surface-sunk); box-shadow: 3px 4px 0 0 var(--lilac), 6px 8px 0 0 var(--mint); }
+.zb-ctx-colors { padding: 8px 10px 10px; border-top: 1px solid var(--surface-sunk); margin-top: 4px; }
+.zb-ctx-label { display: flex; align-items: center; gap: 8px; margin: 0 0 8px 2px; font: 600 13px/1 var(--zb-sans); color: var(--ink-muted); }
+.zb-ctx-label svg { width: 15px; height: 15px; }
+
+/* ---------- header: share, and the save status beside the path ---------- */
+.zb-share-btn { width: 38px; height: 38px; flex: none; border: 0; padding: 0 0 2px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); color: var(--cobalt); box-shadow: var(--zb-l1); cursor: pointer; transition: transform 200ms var(--zb-spring); }
+.zb-share-btn:hover { transform: translateY(-1px); }
+.zb-share-btn:active { transform: translateY(2px); }
+.zb-share-btn:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 3px; }
+.zb-status.is-icon { width: 36px; height: 36px; padding: 0; justify-content: center; border-radius: 50%; color: var(--ink-muted); }
+.zb-status.is-icon.is-live { color: var(--ink-muted); }
+.zb-pulse-icon { animation: zb-pulse 1.1s ease-in-out infinite; }
+@keyframes zb-pulse { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .zb-pulse-icon { animation: none; } }

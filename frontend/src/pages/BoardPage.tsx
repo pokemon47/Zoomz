@@ -1,4 +1,4 @@
-import { CloudOff, Eye, Loader2, Share2, Wifi } from "lucide-react"
+import { CloudOff, CloudUpload, Eye, Share } from "lucide-react"
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { Link, navigate, useLocation } from "@/app/router"
 import { useSession } from "@/app/session"
@@ -171,14 +171,25 @@ function LiveBoard({ store }: { store: SceneStore }) {
         onStopFollow={() => follow && setFollow(null)}
         onToast={toast}
         controller={controller}
+        status={<Status store={store} />}
       />
-      <TopBar onSearch={() => setSearching(true)} tools={<SceneryPicker value={scenery} onChange={setScenery} />}>
+      <TopBar
+        onSearch={() => setSearching(true)}
+        tools={<SceneryPicker value={scenery} onChange={setScenery} />}
+        actions={
+          !store.local &&
+          user && (
+            <button type="button" className="zb-share-btn" onClick={() => setSharing(true)} aria-label="Share" title="Share">
+              <Share size={17} strokeWidth={2.25} aria-hidden />
+            </button>
+          )
+        }
+      >
         {store.local ? (
           <span className="zb-board-title">Demo canvas · <Link to="/login">sign in to make your own</Link></span>
         ) : (
           <TitleField value={store.title} editable={canEditSpace && !!user} onSave={rename} />
         )}
-        <Status store={store} />
         <div className="zb-people-row" aria-label="People here">
           {[...people.values()].map((p) => (
             <button
@@ -198,11 +209,7 @@ function LiveBoard({ store }: { store: SceneStore }) {
             <Eye size={14} strokeWidth={2.25} aria-hidden /> View only
           </span>
         )}
-        {!store.local && user && (
-          <button type="button" className="zb-btn zb-btn-cobalt zb-btn-sm" onClick={() => setSharing(true)} aria-label="Share">
-            <Share2 size={14} strokeWidth={2.5} aria-hidden /> <span className="zb-hide-sm">Share</span>
-          </button>
-        )}
+
       </TopBar>
       {follow && store.peers.get(follow) && (
         <div className="zb-follow-banner" role="status">
@@ -219,12 +226,12 @@ function Status({ store }: { store: SceneStore }) {
   if (store.local) return null
   if (store.status === "live")
     return store.unsaved > 0 ? (
-      <span className="zb-status" title="Saving">
-        <Loader2 size={14} strokeWidth={2.5} className="zb-spin-icon" aria-hidden /> Saving
+      <span className="zb-status is-icon" title="Saving…" aria-label="Saving" role="status">
+        <CloudUpload size={17} strokeWidth={2.25} className="zb-pulse-icon" aria-hidden />
       </span>
     ) : (
-      <span className="zb-status is-live" title="Connected — changes save instantly">
-        <Wifi size={14} strokeWidth={2.5} aria-hidden /> Saved
+      <span className="zb-status is-icon is-live" title="Saved — changes save instantly" aria-label="Saved" role="status">
+        <SavedIcon />
       </span>
     )
   return (
@@ -255,5 +262,15 @@ function TitleField({ value, editable, onSave }: { value: string; editable: bool
         e.stopPropagation()
       }}
     />
+  )
+}
+
+/** A cloud with a green tick: everything is saved. */
+function SavedIcon() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" stroke="currentColor" />
+      <path d="m9 14 2 2 4-4" stroke="#2fb072" strokeWidth="2.6" />
+    </svg>
   )
 }
