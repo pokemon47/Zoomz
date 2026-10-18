@@ -1,27 +1,27 @@
 # MCP v1 progress
 
-Updated 2026-10-18. **93% weighted verified estimate**, not remaining time or production readiness. Equal substantive item weights within each phase. Only verified completed items earn credit; in-progress/pending earn zero. Documentation cleanup earns no implementation credit.
+Updated 2026-10-18. **96% weighted verified estimate**, not remaining time or production readiness. Equal substantive item weights within each phase. Only verified completed items earn credit; in-progress/pending earn zero. Documentation cleanup earns no implementation credit.
 
-`Zoomz MCP v1: [███████████████████░] 93%`
+`Zoomz MCP v1: [███████████████████░] 96%`
 
-Current phase: Phase 6 real-client acceptance and final audit. The local production-container milestone now passes, including actual sandboxed screenshots with the explicitly approved opt-in seccomp profile. No production deployment has been performed.
+Current phase: Phase 6 real-client acceptance and final audit. Public HTTPS OAuth and authenticated SDK operations now pass. The local production-container milestone passes, but the live Zenith preview screenshot call returns 503 and is not verified there. No production deployment has been performed.
 
 | Phase | Weight | Verified items | Earned |
 | --- | ---: | ---: | ---: |
 | 0. Repository and feasibility audit | 5% | 4/4 | 5.00% |
-| 1. MCP foundation and authentication | 20% | 5/6 | 16.67% |
+| 1. MCP foundation and authentication | 20% | 6/6 | 20.00% |
 | 2. Board and element mutations | 20% | 5/5 | 20.00% |
 | 3. Generation lifecycle and recovery | 20% | 6/6 | 20.00% |
 | 4. Media and visual inspection | 15% | 5/6 | 12.50% |
 | 5. Frontend integration | 10% | 5/5 | 10.00% |
 | 6. Hardening and acceptance verification | 10% | 5/6 | 8.33% |
 
-Unrounded sum **92.50%**; displayed phase values are rounded separately. Displayed total uses whole-percent rounding.
+Unrounded sum **95.83%**; displayed phase values are rounded separately. Displayed total uses whole-percent rounding. The remaining public renderer failure is a rollout blocker despite locally verified renderer credit.
 
 ## Substantive requirements
 
 - **Phase 0. Completed (4):** authoritative source review; reusable contracts/service review; official MCP/provider feasibility baseline; baseline verification. Dated research is not real-client acceptance.
-- **Phase 1. Completed (5):** official SDK protocol/tools; registration/PKCE/consent; resource-bound expiry/rotation/revocation; current-role/scope enforcement; concurrent one-use credential consumption. **In progress (1):** public HTTPS client authorization. Evidence: test_mcp.py, actual SDK over ASGI/local HTTP, not Inspector or provider accounts.
+- **Phase 1. Completed (6):** official SDK protocol/tools; registration/PKCE/consent; resource-bound expiry/rotation/revocation; current-role/scope enforcement; concurrent one-use credential consumption; public HTTPS client authorization. Public evidence includes real browser consent/callback/state/PKCE exchange and authenticated SDK initialize/discovery/write operations through Zenith ingress. This is not provider-account acceptance.
 - **Phase 2. Completed (5):** nested creation/exact geometry; atomic validation/rollback; persisted retries/concurrent SQLite retries; source-reference persistence/access validation; normal-editor acceptance. Browser evidence includes an invited editor observing live MCP edits, editing a generated note, raised-card drag/resize and undo, manual creation/undo/redo, root/child/grandchild navigation and reload persistence. MCP edits arrive as remote operations; they do not enter another user's local undo stack.
 - **Phase 3. Completed (6):** lifecycle/checkpoints/new-connection continuation; pause through both backend interfaces/manual edits preserved; fresh-revision conflicts and approval/snapshot recovery; SQLite in-flight pause/write coordination; browser-visible generating status/Pause; equivalent PostgreSQL concurrency verification. PostgreSQL 16.15 passes the entire backend suite, including both pause interfaces. A separate seed/restart/verify exercise preserves OAuth, paused state, checkpoint, safe retry, manual edit and media, then finalizes through a new connection in a fresh application process.
 - **Phase 4. Completed (5):** inline media through existing validation; protected refs and real source-image/PDF-page results; structural bounds/overlaps/gaps; real sandboxed Chromium board screenshots, including nested/close-up; bulk-upload/source association. The browser uploads text originals, a two-page PDF and an image, associates an exact asset ID, retrieves original bytes through the citation, rejects anonymous unsigned access and receives PDF page 2 as an actual SDK image. **In progress (1):** actual provider attachment transfer, mocked transport/security only. Native PowerPoint extraction is not implemented or required; provider source transfer remains unverified.
@@ -29,6 +29,16 @@ Unrounded sum **92.50%**; displayed phase values are rounded separately. Display
 - **Phase 6. Completed (5):** focused security regressions; frontend checks/build; narrow independent OAuth/permission review and fixes; full SQLite regression/migration round trip/synthetic HTTP SDK; PostgreSQL/production image/restart/recovery and sandboxed renderer acceptance. **Pending (1):** real Claude/Plus and realistic lecture acceptance. Final security/high-reasoning review remains required, not already satisfied by the narrow review.
 
 ## Latest recorded evidence
+
+Live preview checkpoint, 2026-10-18 from 01:16 UTC:
+
+- Public preview `https://50f96289938d1461-ishaaq426.zh.run` has valid TLS, frontend/login/demo/render-shell responses 200, `/api/health` 200 and `/healthz` 200. OAuth discovery is 200 with the correct public HTTPS issuer/resource/routes. Anonymous account/workspace/MCP management endpoints and MCP initialize reject access with 401; an invalid bearer also returns 401. Production API docs are disabled (404).
+- Actual sandboxed browser loads login/demo canvas without page errors; anonymous `/ai` redirects to login and WSS rejects an anonymous handshake with 403. Public registration returns 201 and unsafe redirect registrations return 400. Authenticated WebSocket acceptance is not yet established publicly.
+- Public frontend JS/CSS exactly match local built assets. Local HEAD is `87e56a7c4d8ab46cf21121d598a1b052eb6bded3`; deployed backend commit is unknown. Zenith management is unauthenticated and expiry time cannot be read.
+- SMTP delivery/sign-in succeeded according to the user's controlled-account observation. In their actual ChatGPT Plus account, the user confirmed OAuth consent completed with the correct `/mcp` endpoint and selected Zoomz, but ChatGPT reported that moodboard-reading actions were not available. App details showed metadata without a discovered action list. **ChatGPT acceptance did not pass**; no actual provider tool call or write is evidenced. Tool scanning, action enablement and account capability remain to be distinguished. The user explicitly has not tested Claude yet. Provider attachments and lecture quality remain unverified.
+- Public browser OAuth consent, callback/state and PKCE token exchange passed (200), followed by authenticated HTTPS SDK initialize and discovery of 13 tools. Created only the new disposable board `/b/f8ace1b8e2304b2d810d3476c34fb459`. Nested atomic batch, exact note geometry, identical persisted retry, child-board read, checkpoint, paused-write rejection (409), resume and finalization passed. Synthetic source-reference content is not original-media or educational-quality acceptance.
+- A fresh separately authorized connection read the persisted test board. Actual public `get_board_preview` returned **503**, with message `Board previews are disabled; configure the sandboxed Chromium runtime first`. This confirms deployment feature disablement, not a demonstrated sandbox failure. Hosting configuration was not changed.
+- Corrected public revocation **passes** at 01:29 UTC: revoke returns 200, then a valid MCP initialize request using the revoked token returns **401**. The first harness omitted MCP Accept headers (406); the second omitted the required revocation client ID and correctly left access active (200). Both were harness mistakes, not application defects. Earlier test connections should be revoked through `/ai` after acceptance; no credentials were logged or saved.
 
 Current continuation evidence, using disposable local data:
 
@@ -49,7 +59,7 @@ Current continuation evidence, using disposable local data:
 
 ## Blockers and next step
 
-1. Authorized public HTTPS endpoint and real accounts. Claude/Plus writes and attachment transfer untested. Dated official research does not establish ordinary Plus write support.
+1. Live renderer is explicitly disabled (503). Enabling it requires a separately approved hosting configuration change and secure runtime verification on that host. Public HTTPS SDK authorization and revocation are verified; Claude/Plus writes and attachment transfer remain untested. Dated official research does not establish ordinary Plus write support.
 2. Complete realistic lecture acceptance and final security review. The final High-reasoning audit requires the user's separate instruction; no model or reasoning-mode change was made.
 3. Before any authorized production rollout, review the app-wide syscall scope and engine-pinned policy, verify the intended host, and confirm actual instance SMTP/public ingress. The optional configuration is prepared and locally tested, not deployed.
 
