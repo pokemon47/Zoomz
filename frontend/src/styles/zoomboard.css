@@ -938,13 +938,13 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
 .zb-minimap-hide { flex: none; width: 24px; height: 24px; margin: -4px -4px -4px 0; border: 0; padding: 0; border-radius: 50%; display: grid; place-items: center; background: none; color: var(--ink-muted); cursor: pointer; }
 .zb-minimap-hide:hover { background: var(--surface-sunk); color: var(--ink); }
 .zb-minimap-hide:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 2px; }
-.zb-minimap-panel { transition: opacity 220ms ease-out, transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s; transform-origin: left bottom; }
-.zb-minimap-panel.is-collapsed { opacity: 0; transform: translateX(-24px) scale(0.85); visibility: hidden; pointer-events: none; transition: opacity 180ms ease-in, transform 220ms ease-in, visibility 0s 220ms; }
+.zb-minimap-panel { transition: opacity 220ms ease-out, transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s; transform-origin: right bottom; }
+.zb-minimap-panel.is-collapsed { opacity: 0; transform: translateX(24px) scale(0.85); visibility: hidden; pointer-events: none; transition: opacity 180ms ease-in, transform 220ms ease-in, visibility 0s 220ms; }
 .zb-map-tab {
-  position: absolute; left: 0; bottom: 96px; z-index: 21; width: 30px; height: 34px; padding: 0 0 0 4px; border: 0;
-  border-radius: 0 var(--radius-full) var(--radius-full) 0; display: grid; place-items: center;
+  position: absolute; right: 0; bottom: 84px; z-index: 21; width: 30px; height: 34px; padding: 0 4px 0 0; border: 0;
+  border-radius: var(--radius-full) 0 0 var(--radius-full); display: grid; place-items: center;
   background: var(--surface); color: var(--ink-muted); box-shadow: var(--zb-l1); cursor: pointer;
-  transform: translateX(-100%); opacity: 0; pointer-events: none;
+  transform: translateX(100%); opacity: 0; pointer-events: none;
   transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease-out, color 140ms;
 }
 .zb-map-tab.is-shown { transform: none; opacity: 1; pointer-events: auto; transition-delay: 120ms; }

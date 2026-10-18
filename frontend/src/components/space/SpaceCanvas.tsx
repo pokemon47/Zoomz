@@ -1539,7 +1539,7 @@ export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = nul
           <ZoomControls readout={readout} onZoomIn={() => zoomCentre(ZOOM.step)} onZoomOut={() => zoomCentre(1 / ZOOM.step)} onFit={() => fitBoard(lay.focus)} onWhole={() => fitBoard(space.rootId)} labels={labels} onToggleLabels={toggleLabels} />
         </div>
       </DraggablePanel>
-      <DraggablePanel id="minimap" label="the map" defaultPos={{ corner: "bl", dx: 16, dy: 16 }} className={`zb-minimap-panel${mapHidden ? " is-collapsed" : ""}`}>
+      <DraggablePanel id="minimap" label="the map" defaultPos={{ corner: "br", dx: 16, dy: 84 }} className={`zb-minimap-panel${mapHidden ? " is-collapsed" : ""}`}>
         <Minimap space={space} focus={lay.focus} cam={engine.display} vp={vp} onCenter={centerOn} onHide={toggleMap} />
       </DraggablePanel>
       <button

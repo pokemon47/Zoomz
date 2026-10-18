@@ -15,7 +15,8 @@ type Props = {
   children: ReactNode
 }
 
-const KEY = (id: string) => `zoomz.panel.v2.${id}`
+// v3: the map moved to the bottom right, above the zoom controls; older saved spots start fresh.
+const KEY = (id: string) => `zoomz.panel.v3.${id}`
 const load = (id: string, fallback: Pos): Pos => {
   try {
     const v = JSON.parse(localStorage.getItem(KEY(id)) ?? "null") as Pos | null
@@ -79,6 +80,8 @@ export function DraggablePanel({ id, label, defaultPos, className, children }: P
     const fix = () => {
       if (drag.current) return
       const r = el.getBoundingClientRect()
+      // Hidden (e.g. the map on a phone): nothing to measure, and its spot must not change.
+      if (!r.width || !r.height) return
       const c = clampToViewport(r.left, r.top, r.width, r.height, window.innerWidth, window.innerHeight)
       if (Math.abs(c.left - r.left) > 0.5 || Math.abs(c.top - r.top) > 0.5) settle(c.left, c.top)
     }
