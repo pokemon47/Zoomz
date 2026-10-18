@@ -44,7 +44,7 @@ type Provenance = { references?: SourceReference[] }
 
 export type BoardNode = BaseNode & {
   type: "board"
-  content: { title: string; description?: string | null; frame?: Frame; color?: string | null }
+  content: { title: string; description?: string | null; frame?: Frame; color?: string | null } & Provenance
 }
 
 export type ImageNode = BaseNode & {
@@ -54,7 +54,7 @@ export type ImageNode = BaseNode & {
 
 export type NoteNode = BaseNode & {
   type: "note"
-  content: { title: string; body: string; color?: string | null }
+  content: { title: string; body: string; color?: string | null } & Provenance
 }
 
 /** Any other uploaded file (PDF, video, document…). */

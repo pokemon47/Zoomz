@@ -28,6 +28,6 @@ export function McpRenderPage() {
   const scenery = THEMES.find((theme) => theme.id === state.store.scenery)?.id ?? "studio"
   return <main className="mcp-render fixed inset-0" data-mcp-ready="true" style={{ pointerEvents: "none" }}>
     <style>{".mcp-render > div > :not(.zb-viewport) { display: none !important; }"}</style>
-    <SpaceCanvas store={state.store} scenery={scenery} onScenery={() => {}} initialView={state.bounds ?? undefined} />
+    <SpaceCanvas store={state.store} scenery={scenery} initialView={state.bounds ?? undefined} />
   </main>
 }

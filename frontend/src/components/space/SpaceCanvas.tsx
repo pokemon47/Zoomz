@@ -62,6 +62,8 @@ export type CanvasController = {
 type Props = {
   store: SceneStore
   scenery: SceneryId
+  /** Optional initial framing bounds in the root board's local coordinates. */
+  initialView?: Rect
   /** connId of the person whose view you're following, if any. */
   follow?: string | null
   onStopFollow?(): void
@@ -107,7 +109,7 @@ const isTyping = (t: EventTarget | null) => {
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)
 }
 
-export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = null, onStopFollow, onToast, controller }: Props) {
+export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = null, onStopFollow, onToast, controller, initialView }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const reduced = useReducedMotion() ?? false
   const space = store.space
@@ -1675,6 +1677,7 @@ function Item({ placed, space, tactile, selected, multi, reduced, dragging, drop
         ox: (lattice.ox - x) / (scale * f),
         oy: (lattice.oy - y) / (scale * f),
       })}
+      {selected && !multi && n.type !== "arrow" && n.content.references?.length ? <SourceIndicator references={n.content.references} /> : null}
     </div>
   )
 }

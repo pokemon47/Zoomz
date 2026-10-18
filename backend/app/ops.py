@@ -324,7 +324,15 @@ def _flatten(ops: Any, depth: int = 0) -> Any:
     return out
 
 
-def apply(db: Session, space: Space, user: Optional[User], base_role: str, op: Any) -> dict[str, Any]:
+def _reference_access(ctx: Ctx, content: dict) -> None:
+    for ref in content.get("references", []):
+        if ref.get("asset_id"):
+            file = ctx.db.get(StoredFile, ref["asset_id"])
+            if not file or file.space_id != ctx.space.id:
+                raise OpError("Source asset unavailable in this space", 403)
+
+
+def apply(db: Session, space: Space, user: Optional[User], base_role: str, op: Any, *, commit: bool = True) -> dict[str, Any]:
     """Apply one operation (or a batch) atomically. Returns the broadcast message."""
     if not isinstance(op, dict) or op.get("type") not in (*HANDLERS, "batch"):
         raise OpError("unknown operation")

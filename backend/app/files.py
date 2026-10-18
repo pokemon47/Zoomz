@@ -51,15 +51,15 @@ def store_upload(space_id, request, file, user, db, *, commit=True, file_id=None
     if storage.used_bytes(space.id) >= settings.space_quota_mb * 1024 * 1024:
         raise HTTPException(413, f"This board has used its {settings.space_quota_mb // 1024} GB of storage. Remove some files first.")
 
-    rec = ingest(db, space, user, file.file, file.filename or "file", file.content_type or "")
+    rec = ingest(db, space, user, file.file, file.filename or "file", file.content_type or "", commit=commit, file_id=file_id)
     return file_out(rec)
 
 
-def ingest(db: Session, space, user: Optional[User], stream: BinaryIO, filename: str, content_type: str = "") -> StoredFile:
+def ingest(db: Session, space, user: Optional[User], stream: BinaryIO, filename: str, content_type: str = "", *, commit: bool = True, file_id: Optional[str] = None) -> StoredFile:
     """Store one file in a space: check its type from its bytes, size-limit, scan, sanitise
     SVGs, make previews. Commits and returns the record; raises HTTPException if refused."""
     max_bytes = settings.max_upload_mb * 1024 * 1024
-    fid = new_id()
+    fid = file_id or new_id()
     name = (filename or "file").replace("/", "_").replace("\\", "_")[:255] or "file"
     head = stream.read(8192)
     stream.seek(0)
