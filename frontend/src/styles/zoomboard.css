@@ -1002,3 +1002,11 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
 /* While an arrow is being carried out of the menu, the menu steps aside so you can drop anywhere. */
 .zb-arrow-flyout.is-carrying { opacity: 0.25; pointer-events: none; transition: opacity 160ms ease-out; }
 .zb-arrow-flyout.is-carrying .zb-arrow-drag { pointer-events: auto; }
+/* The joint in the middle of a curved arrow: drag it to change the bend. */
+.zb-arrow-bend {
+  position: absolute; z-index: 45900; width: 14px; height: 14px; margin: -7px 0 0 -7px; padding: 0; border-radius: 4px; transform: rotate(45deg);
+  border: 2.5px solid var(--cobalt); background: var(--surface); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); cursor: grab; touch-action: none;
+  transition: scale 160ms var(--zb-spring);
+}
+.zb-arrow-bend:hover { scale: 1.25; }
+.zb-arrow-bend:active { cursor: grabbing; }

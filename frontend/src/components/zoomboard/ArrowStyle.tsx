@@ -1,15 +1,16 @@
-import { arrowGeometry } from "@/components/space/ArrowItem"
-import { DEFAULT_ARROW, curveControl } from "@/lib/arrows"
+import { arrowGeometry, midOf } from "@/components/space/ArrowItem"
+import { DEFAULT_ARROW } from "@/lib/arrows"
 import type { ArrowStyle } from "@/lib/types"
 
 /** A small drawing of an arrow in a given style. */
 export function ArrowGlyph({ style, width = 34, height = 20, strokeWidth = 2, headFactor = 3.2 }: { style: ArrowStyle; width?: number; height?: number; strokeWidth?: number; headFactor?: number }) {
-  const a = { x: 3, y: style.shape === "curved" ? height - 4 : height / 2 }
-  const b = { x: width - 3, y: style.shape === "curved" ? height - 4 : height / 2 }
-  const c = style.shape === "curved" ? curveControl(a, b) : null
+  const curved = style.shape === "curved", elbow = style.shape === "elbow"
+  const a = { x: 3, y: elbow ? 3 : curved ? height - 4 : height / 2 }
+  const b = { x: width - 3, y: elbow ? height - 3 : curved ? height - 4 : height / 2 }
+  const mid = midOf(a, b, style)
   // Flatten the bend so the glyph fits its box.
-  const cc = c && { x: c.x, y: Math.max(1, c.y + (height - 4 - c.y) * 0.35) }
-  const g = arrowGeometry(a, b, cc, style, strokeWidth, headFactor)
+  if (mid && curved) mid.p = { x: mid.p.x, y: Math.max(1, mid.p.y + (height - 4 - mid.p.y) * 0.35) }
+  const g = arrowGeometry(a, b, mid, style, strokeWidth, headFactor)
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden className="zb-arrow-glyph">
       <path d={g.line} stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" fill="none" strokeDasharray={g.dash ? `0 ${strokeWidth * 2.2}` : undefined} />
@@ -21,7 +22,7 @@ export function ArrowGlyph({ style, width = 34, height = 20, strokeWidth = 2, he
 }
 
 const ROWS: { key: keyof ArrowStyle; label: string; options: { value: string; label: string }[] }[] = [
-  { key: "shape", label: "Shape", options: [{ value: "straight", label: "Straight" }, { value: "curved", label: "Curved" }] },
+  { key: "shape", label: "Shape", options: [{ value: "straight", label: "Straight" }, { value: "curved", label: "Curved (drag its middle to bend it)" }, { value: "elbow", label: "90° angle" }] },
   { key: "line", label: "Line", options: [{ value: "solid", label: "Solid" }, { value: "dotted", label: "Dotted" }] },
   {
     key: "heads",

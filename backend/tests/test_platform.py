@@ -289,6 +289,22 @@ def test_upload_limits(make_client):
 # ---------------------------------------------------------------- live collaboration
 
 
+def _live_exchange(a, b, root):
+    assert b.receive_json()["role"] == "viewer"
+    assert a.receive_json()["t"] == "presence"  # viewer joined
+    a.send_json({"t": "presence", "focus": root, "cursor": {"x": 1, "y": 2}})
+    p = b.receive_json()
+    assert p["t"] == "presence" and p["peer"]["cursor"] == {"x": 1, "y": 2} and p["peer"]["name"]
+    nid = uid()
+    a.send_json({"t": "op", "cid": "c1", "op": {"type": "create", "node": {"id": nid, "type": "note", "parentId": root, "content": {"title": "live"}}}})
+    got_a, got_b = a.receive_json(), b.receive_json()
+    assert got_a["cid"] == "c1" and got_b["changes"][0]["node"]["id"] == nid
+    b.send_json({"t": "op", "cid": "v1", "op": {"type": "delete", "id": nid}})
+    rej = b.receive_json()
+    assert rej["t"] == "reject" and rej["cid"] == "v1" and rej["status"] == 403
+    return nid, got_a["seq"]
+
+
 def test_live_ops_broadcast_presence_and_viewer_reject(make_client):
     owner = make_client("live@example.com")
     sid = first_space(owner)["id"]
@@ -296,21 +312,12 @@ def test_live_ops_broadcast_presence_and_viewer_reject(make_client):
     viewer = make_client("watcher@example.com")
     viewer.post(f"/api/join/{token}", headers=H)
     root = scene(owner, sid)["rootBoardId"]
-    with owner.websocket_connect(f"/api/spaces/{sid}/live") as a, viewer.websocket_connect(f"/api/spaces/{sid}/live") as b:
-        hello_a, hello_b = a.receive_json(), b.receive_json()
-        assert hello_a["t"] == "hello" and hello_b["role"] == "viewer"
-        assert a.receive_json()["t"] == "presence"  # viewer joined
-        a.send_json({"t": "presence", "focus": root, "cursor": {"x": 1, "y": 2}})
-        p = b.receive_json()
-        assert p["t"] == "presence" and p["peer"]["cursor"] == {"x": 1, "y": 2} and p["peer"]["name"]
-        nid = uid()
-        a.send_json({"t": "op", "cid": "c1", "op": {"type": "create", "node": {"id": nid, "type": "note", "parentId": root, "content": {"title": "live"}}}})
-        got_a, got_b = a.receive_json(), b.receive_json()
-        assert got_a["cid"] == "c1" and got_b["changes"][0]["node"]["id"] == nid
-        b.send_json({"t": "op", "cid": "v1", "op": {"type": "delete", "id": nid}})
-        rej = b.receive_json()
-        assert rej["t"] == "reject" and rej["cid"] == "v1" and rej["status"] == 403
-        seq = got_a["seq"]
+    # The owner is fully in the room (hello received) before the viewer connects, so the
+    # owner is sure to hear about the viewer joining.
+    with owner.websocket_connect(f"/api/spaces/{sid}/live") as a:
+        assert a.receive_json()["t"] == "hello"
+        with viewer.websocket_connect(f"/api/spaces/{sid}/live") as b:
+            nid, seq = _live_exchange(a, b, root)
     # Reconnect and catch up on what was missed.
     op(owner, sid, {"type": "update", "id": nid, "patch": {"x": 99}})
     with viewer.websocket_connect(f"/api/spaces/{sid}/live?since={seq}") as b2:
@@ -729,5 +736,5 @@ def test_arrow_styles(make_client):
     node = {"id": aid, "type": "arrow", "parentId": root, "x": 0, "y": 0, "w": 100, "h": 30, "content": {"shape": "curved", "line": "dotted", "heads": "both"}}
     r = op(c, sid, {"type": "create", "node": node})
     assert r.status_code == 200 and {k: r.json()["changes"][0]["node"]["content"][k] for k in ("shape", "line", "heads")} == {"shape": "curved", "line": "dotted", "heads": "both"}
-    assert op(c, sid, {"type": "update", "id": aid, "patch": {"content": {"heads": "none"}}}).status_code == 200
+    assert op(c, sid, {"type": "update", "id": aid, "patch": {"content": {"heads": "none", "shape": "elbow", "bend": 0.6}}}).status_code == 200
     assert op(c, sid, {"type": "update", "id": aid, "patch": {"content": {"shape": "zigzag"}}}).status_code == 400

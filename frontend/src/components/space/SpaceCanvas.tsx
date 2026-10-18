@@ -33,7 +33,7 @@ import { copyNodes, lastClip, parseClip, pasteOps } from "@/lib/clipboard"
 import { MOTION, SPACE, ZOOM, cardBoxFactor, floorFor, perspectiveFor } from "@/lib/constants"
 import { IMPORT_GRID, IMPORT_LIMITS, countFiles, fileCard, planFolder, readDrop, type BoardPlan, type FolderTree } from "@/lib/folderImport"
 import { api, apiUrl } from "@/lib/http"
-import { DEFAULT_ARROW, arrowEnds, arrowPatch, attachable, distToArrow, isArrow, styleOf, type Box, type Pt } from "@/lib/arrows"
+import { DEFAULT_ARROW, DEFAULT_BEND, arrowEnds, bendThrough, curveMid, arrowPatch, attachable, distToArrow, isArrow, styleOf, type Box, type Pt } from "@/lib/arrows"
 import { getLabels, saveLabels, type Labels } from "@/lib/labels"
 import { pathTo, titleOf } from "@/lib/scene"
 import { SCENERY, themeById, type SceneryId } from "@/lib/scenery"
@@ -71,6 +71,7 @@ type Press =
   | { kind: "marquee"; pointer: number; sx: number; sy: number; x: number; y: number }
   | { kind: "items"; pointer: number; sx: number; sy: number; primary: string; fx: number; fy: number; grabs: Grab[]; moved: boolean; additive: boolean; edit: string | null }
   | { kind: "arrowEnd"; pointer: number; id: string; end: 1 | 2; at: Pt; snap: string | null; moved: boolean }
+  | { kind: "arrowBend"; pointer: number; id: string; bend: number; moved: boolean }
   | { kind: "resize"; pointer: number; sx: number; sy: number; id: string; w: number; h: number; scale: number; keepAspect: boolean; orig: SceneNode }
 
 /** Text being edited in place on a card. */
@@ -298,7 +299,7 @@ export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToa
       if (p.opacity < 0.2 || p.node.id === exclude) continue
       if (isArrow(p.node)) {
         const [a, b] = arrowScreenEnds(p)
-        if (distToArrow({ x: px, y: py }, a, b, styleOf(p.node).shape) > 8) continue
+        if (distToArrow({ x: px, y: py }, a, b, styleOf(p.node).shape, p.node.content.bend ?? undefined) > 8) continue
       } else if (px < p.x || py < p.y || px > p.x + p.node.w * p.scale || py > p.y + p.node.h * p.scale) continue
       if (!best || p.order > best.order) best = p
     }
@@ -873,6 +874,17 @@ export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToa
     engine.stop()
     const pt = local(e)
 
+    const bendHandle = target.closest<HTMLElement>("[data-arrow-bend]")
+    if (bendHandle) {
+      const n = space.node(bendHandle.dataset.arrowBend!)
+      if (n && isArrow(n)) {
+        const next: Press = { kind: "arrowBend", pointer: e.pointerId, id: n.id, bend: n.content.bend ?? DEFAULT_BEND, moved: false }
+        pressRef.current = next
+        setPress(next)
+        return
+      }
+    }
+
     const endHandle = target.closest<HTMLElement>("[data-arrow-end]")
     if (endHandle) {
       const [id, end] = endHandle.dataset.arrowEnd!.split(":")
@@ -988,6 +1000,17 @@ export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToa
       setPress({ ...p })
       return
     }
+    if (p.kind === "arrowBend") {
+      const placed = placedById.get(p.id)
+      const n = space.node(p.id)
+      if (!placed || !n || !store.canEdit(n.parentId)) return
+      // The curve follows the handle: its middle goes where you drag it.
+      const [a, b] = arrowScreenEnds(placed)
+      pressRef.current = { ...p, bend: bendThrough(a, b, pt), moved: true }
+      setPress(pressRef.current)
+      kick()
+      return
+    }
     if (p.kind === "arrowEnd") {
       const n = space.node(p.id)
       if (!n || !store.canEdit(n.parentId)) return
@@ -1079,6 +1102,8 @@ export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToa
         setSelection(ids)
         setAnnouncement(`${ids.length} selected`)
       }
+    } else if (p.kind === "arrowBend") {
+      if (p.moved) store.commit({ type: "update", id: p.id, patch: { content: { bend: p.bend } } }, "bend arrow")
     } else if (p.kind === "arrowEnd") {
       const n = space.node(p.id)
       const placed = placedById.get(p.id)
@@ -1269,6 +1294,7 @@ export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToa
   // The selected arrow shows a handle on each end, to drag it free or onto another item.
   const arrowSel = single && isArrow(single.node) && store.canEdit(single.node.parentId) ? single : undefined
   const endDrag = press?.kind === "arrowEnd" && press.moved ? press : null
+  const bendDrag = press?.kind === "arrowBend" ? press : null
   const arrowEndsFor = (p: Placed) => (endDrag?.id === p.node.id ? arrowScreenEnds(p, { end: endDrag.end, at: endDrag.at, snap: endDrag.snap }) : arrowScreenEnds(p))
   const rootClass = ["absolute inset-0", !labels.boards && "zb-hide-board-labels", !labels.photos && "zb-hide-photo-labels"].filter(Boolean).join(" ")
 
@@ -1342,7 +1368,8 @@ export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToa
         {ordered.map((p) => {
           if (isArrow(p.node)) {
             const [a, b] = arrowEndsFor(p)
-            return <ArrowItem key={p.node.id} id={p.node.id} a={a} b={b} style={styleOf(p.node)} scale={p.scale} order={p.order} opacity={p.opacity} selected={selected.has(p.node.id)} hidden={held === p.node.id} />
+            const bend = bendDrag?.id === p.node.id ? bendDrag.bend : (p.node.content.bend ?? undefined)
+            return <ArrowItem key={p.node.id} id={p.node.id} a={a} b={b} style={styleOf(p.node)} bend={bend} scale={p.scale} order={p.order} opacity={p.opacity} selected={selected.has(p.node.id)} hidden={held === p.node.id} />
           }
           return (
           <Item
@@ -1366,7 +1393,24 @@ export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToa
           />
           )
         })}
-        {arrowSel && !endDrag && (
+        {arrowSel &&
+          !endDrag &&
+          styleOf(arrowSel.node as ArrowNode).shape === "curved" &&
+          (() => {
+            const [a, b] = arrowEndsFor(arrowSel)
+            const m = curveMid(a, b, bendDrag?.id === arrowSel.node.id ? bendDrag.bend : ((arrowSel.node as ArrowNode).content.bend ?? DEFAULT_BEND))
+            return (
+              <button
+                type="button"
+                className="zb-arrow-bend"
+                data-arrow-bend={arrowSel.node.id}
+                aria-label="Bend the arrow"
+                title="Drag to bend the curve"
+                style={{ left: m.x, top: m.y }}
+              />
+            )
+          })()}
+        {arrowSel && !endDrag && !bendDrag && (
           <ArrowStyleBar
             at={(() => {
               const [a, b] = arrowEndsFor(arrowSel)

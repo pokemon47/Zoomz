@@ -39,9 +39,9 @@ CONTENT_FIELDS: dict[str, dict[str, int]] = {
     "arrow": {"from": 64, "to": 64, "shape": 10, "line": 10, "heads": 10},
 }
 #: Allowed values for arrow styles (unset = straight, solid, pointing at the end).
-ARROW_STYLES = {"shape": {"straight", "curved"}, "line": {"solid", "dotted"}, "heads": {"end", "start", "both", "none"}}
+ARROW_STYLES = {"shape": {"straight", "curved", "elbow"}, "line": {"solid", "dotted"}, "heads": {"end", "start", "both", "none"}}
 #: Numeric content fields: arrow end points, relative to the arrow's own x/y, in board units.
-NUM_FIELDS: dict[str, tuple[str, ...]] = {"arrow": ("x1", "y1", "x2", "y2")}
+NUM_FIELDS: dict[str, tuple[str, ...]] = {"arrow": ("x1", "y1", "x2", "y2", "bend")}
 DEFAULT_FRAME = {"x": 0, "y": 0, "w": 1300, "h": 1100}
 
 

@@ -10,18 +10,43 @@ export function styleOf(n: ArrowNode): ArrowStyle {
   return { shape: c.shape ?? "straight", line: c.line ?? "solid", heads: c.heads ?? "end" }
 }
 
-/** The bend of a curved arrow: a control point off the middle of the line, to its left. */
-export function curveControl(a: Pt, b: Pt): Pt {
+/** How far a new curved arrow bows out, as a share of its length. */
+export const DEFAULT_BEND = 0.28
+
+/** The control point of a curved arrow: off the middle of the line, `bend` lengths to its side. */
+export function curveControl(a: Pt, b: Pt, bend = DEFAULT_BEND): Pt {
   const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
   const dx = b.x - a.x, dy = b.y - a.y
-  const k = 0.28
-  return { x: mx + dy * k, y: my - dx * k }
+  return { x: mx + dy * bend, y: my - dx * bend }
 }
 
-/** Points along the arrow (for clicking it): the line itself, or its curve. */
-export function arrowPolyline(a: Pt, b: Pt, shape: ArrowStyle["shape"]): Pt[] {
+/** The point halfway along a curved arrow (where its bend handle sits). */
+export function curveMid(a: Pt, b: Pt, bend = DEFAULT_BEND): Pt {
+  const c = curveControl(a, b, bend)
+  return { x: (a.x + 2 * c.x + b.x) / 4, y: (a.y + 2 * c.y + b.y) / 4 }
+}
+
+/** The bend that makes a curve between a and b pass through p (its midpoint goes to p). */
+export function bendThrough(a: Pt, b: Pt, p: Pt): number {
+  const dx = b.x - a.x, dy = b.y - a.y
+  const len2 = dx * dx + dy * dy
+  if (!len2) return 0
+  // Midpoint of the curve = (a + b) / 4 + c / 2, so c = 2p − (a + b) / 2.
+  const cx = 2 * p.x - (a.x + b.x) / 2, cy = 2 * p.y - (a.y + b.y) / 2
+  const k = ((cx - (a.x + b.x) / 2) * dy - (cy - (a.y + b.y) / 2) * dx) / len2
+  return Math.max(-3, Math.min(3, Math.round(k * 1000) / 1000))
+}
+
+/** The corner of a 90° arrow: across first along whichever way it travels further. */
+export function elbowCorner(a: Pt, b: Pt): Pt {
+  return Math.abs(b.x - a.x) >= Math.abs(b.y - a.y) ? { x: b.x, y: a.y } : { x: a.x, y: b.y }
+}
+
+/** Points along the arrow (for clicking it): the line, its two legs, or its curve. */
+export function arrowPolyline(a: Pt, b: Pt, shape: ArrowStyle["shape"], bend = DEFAULT_BEND): Pt[] {
+  if (shape === "elbow") return [a, elbowCorner(a, b), b]
   if (shape !== "curved") return [a, b]
-  const c = curveControl(a, b)
+  const c = curveControl(a, b, bend)
   return Array.from({ length: 17 }, (_, i) => {
     const t = i / 16, u = 1 - t
     return { x: u * u * a.x + 2 * u * t * c.x + t * t * b.x, y: u * u * a.y + 2 * u * t * c.y + t * t * b.y }
@@ -29,8 +54,8 @@ export function arrowPolyline(a: Pt, b: Pt, shape: ArrowStyle["shape"]): Pt[] {
 }
 
 /** Distance from p to an arrow drawn between a and b. */
-export function distToArrow(p: Pt, a: Pt, b: Pt, shape: ArrowStyle["shape"]): number {
-  const pts = arrowPolyline(a, b, shape)
+export function distToArrow(p: Pt, a: Pt, b: Pt, shape: ArrowStyle["shape"], bend = DEFAULT_BEND): number {
+  const pts = arrowPolyline(a, b, shape, bend)
   let d = Infinity
   for (let i = 1; i < pts.length; i++) d = Math.min(d, distToSegment(p, pts[i - 1], pts[i]))
   return d

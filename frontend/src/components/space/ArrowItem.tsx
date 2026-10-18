@@ -1,4 +1,4 @@
-import { curveControl, type Pt } from "@/lib/arrows"
+import { DEFAULT_BEND, curveControl, elbowCorner, type Pt } from "@/lib/arrows"
 import type { ArrowStyle } from "@/lib/types"
 
 type Props = {
@@ -7,6 +7,8 @@ type Props = {
   a: Pt
   b: Pt
   style: ArrowStyle
+  /** How far a curved arrow bows out (share of its length). */
+  bend?: number
   /** Screen px per board unit, so the line thickens as you get closer. */
   scale: number
   order: number
@@ -20,15 +22,16 @@ type Props = {
  * with a head at either end, both or neither. Only the line itself (plus a little slack)
  * catches the pointer, so whatever is under the rest of its box stays clickable.
  */
-export function ArrowItem({ id, a, b, style, scale, order, opacity, selected, hidden }: Props) {
+export function ArrowItem({ id, a, b, style, bend = DEFAULT_BEND, scale, order, opacity, selected, hidden }: Props) {
   const sw = Math.min(8, Math.max(1.5, 3 * scale))
   const pad = Math.max(9, sw * 3.6) + 8
-  const c = style.shape === "curved" ? curveControl(a, b) : null
+  const mid = midOf(a, b, style, bend)
+  const c = mid?.p ?? null
   const xs = [a.x, b.x, ...(c ? [c.x] : [])], ys = [a.y, b.y, ...(c ? [c.y] : [])]
   const x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad
   const w = Math.max(...xs) - Math.min(...xs) + pad * 2, h = Math.max(...ys) - Math.min(...ys) + pad * 2
   const P = (p: Pt) => ({ x: p.x - x0, y: p.y - y0 })
-  const g = arrowGeometry(P(a), P(b), c && P(c), style, sw)
+  const g = arrowGeometry(P(a), P(b), mid && { kind: mid.kind, p: P(mid.p) }, style, sw)
   return (
     <svg
       className={`zb-arrow${selected ? " is-selected" : ""}`}
@@ -46,7 +49,7 @@ export function ArrowItem({ id, a, b, style, scale, order, opacity, selected, hi
       {g.heads.map((d, i) => (
         <path key={i} className="zb-arrow-casing is-head" d={d} strokeWidth={2.5} />
       ))}
-      <path className="zb-arrow-line" d={g.line} strokeWidth={sw} fill="none" strokeDasharray={g.dash ? `0 ${sw * 2.4}` : undefined} />
+      <path className="zb-arrow-line" d={g.line} strokeWidth={sw} fill="none" strokeLinejoin="round" strokeDasharray={g.dash ? `0 ${sw * 2.4}` : undefined} />
       {g.heads.map((d, i) => (
         <path key={i} className="zb-arrow-head" d={d} />
       ))}
@@ -54,8 +57,16 @@ export function ArrowItem({ id, a, b, style, scale, order, opacity, selected, hi
   )
 }
 
+/** The middle of an arrow's path: a curve's control point, or a 90° arrow's corner. */
+export function midOf(a: Pt, b: Pt, style: ArrowStyle, bend = DEFAULT_BEND): { kind: "q" | "l"; p: Pt } | null {
+  if (style.shape === "curved") return { kind: "q", p: curveControl(a, b, bend) }
+  if (style.shape === "elbow") return { kind: "l", p: elbowCorner(a, b) }
+  return null
+}
+
 /** The line (shortened where heads sit, so their tips stay sharp) and the head triangles. */
-export function arrowGeometry(a: Pt, b: Pt, c: Pt | null, style: ArrowStyle, sw: number, headFactor = 3.6) {
+export function arrowGeometry(a: Pt, b: Pt, mid: { kind: "q" | "l"; p: Pt } | null, style: ArrowStyle, sw: number, headFactor = 3.6) {
+  const c = mid?.p ?? null
   const head = Math.max(headFactor * 2.4, sw * headFactor)
   const wantStart = style.heads === "start" || style.heads === "both"
   const wantEnd = style.heads === "end" || style.heads === "both"
@@ -71,7 +82,8 @@ export function arrowGeometry(a: Pt, b: Pt, c: Pt | null, style: ArrowStyle, sw:
   const s = wantStart ? tip(a, towardsA) : null
   const e = wantEnd ? tip(b, towardsB) : null
   const p0 = s?.back ?? a, p1 = e?.back ?? b
-  const line = c ? `M ${p0.x} ${p0.y} Q ${c.x} ${c.y} ${p1.x} ${p1.y}` : `M ${p0.x} ${p0.y} L ${p1.x} ${p1.y}`
-  const full = c ? `M ${a.x} ${a.y} Q ${c.x} ${c.y} ${b.x} ${b.y}` : `M ${a.x} ${a.y} L ${b.x} ${b.y}`
+  const via = (from: Pt, to: Pt) => (!c ? `M ${from.x} ${from.y} L ${to.x} ${to.y}` : mid!.kind === "q" ? `M ${from.x} ${from.y} Q ${c.x} ${c.y} ${to.x} ${to.y}` : `M ${from.x} ${from.y} L ${c.x} ${c.y} L ${to.x} ${to.y}`)
+  const line = via(p0, p1)
+  const full = via(a, b)
   return { line, full, heads: [s?.d, e?.d].filter(Boolean) as string[], dash: style.line === "dotted" }
 }

@@ -12,7 +12,7 @@
 // as you approach, taller things grow faster and drift with the pointer, and things that
 // get too close fly past and fade, like walking through a room rather than scaling a picture.
 
-import { ARROW_PAD, arrowEnds } from "./arrows"
+import { ARROW_PAD, arrowEnds, arrowPolyline } from "./arrows"
 import { lodFor, SPACE } from "./constants"
 import type { ArrowNode, BoardNode, LOD, SceneNode } from "./types"
 import type { SceneIndex } from "./scene"
@@ -474,7 +474,11 @@ export function arrowBox(space: Space, n: ArrowNode, at: { x: number; y: number 
     const tp = space.at(t)
     return { x: tp.x, y: tp.y, w: t.w, h: t.h }
   })
-  return { x: Math.min(a.x, b.x) - ARROW_PAD, y: Math.min(a.y, b.y) - ARROW_PAD, w: Math.abs(a.x - b.x) + ARROW_PAD * 2, h: Math.abs(a.y - b.y) + ARROW_PAD * 2 }
+  // Curves and corners can reach past the two ends.
+  const pts = arrowPolyline(a, b, n.content.shape ?? "straight", n.content.bend ?? undefined)
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y)
+  const x0 = Math.min(...xs), y0 = Math.min(...ys)
+  return { x: x0 - ARROW_PAD, y: y0 - ARROW_PAD, w: Math.max(...xs) - x0 + ARROW_PAD * 2, h: Math.max(...ys) - y0 + ARROW_PAD * 2 }
 }
 
 /** Siblings bottom to top (stable, so equal layers keep their order). */

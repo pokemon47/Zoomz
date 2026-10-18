@@ -1,7 +1,7 @@
 import { Eye } from "lucide-react"
 import { useRef, useState, type PointerEvent } from "react"
 import { DEPTH_DOT, floorFor } from "@/lib/constants"
-import { arrowEnds, curveControl, styleOf } from "@/lib/arrows"
+import { arrowEnds, curveControl, elbowCorner, styleOf } from "@/lib/arrows"
 import { fileKind } from "@/lib/files"
 import { titleOf } from "@/lib/scene"
 import type { Cam, Space, Viewport } from "@/lib/space"
@@ -139,12 +139,12 @@ export function Minimap({ space, focus, cam, vp, onCenter, onHide }: Props) {
                 return { x: tp.x, y: tp.y, w: t.w, h: t.h }
               })
               const st = styleOf(n)
-              const c = st.shape === "curved" ? curveControl(a, b) : null
+              const c = st.shape === "curved" ? curveControl(a, b, n.content.bend ?? undefined) : st.shape === "elbow" ? elbowCorner(a, b) : null
               const sw = Math.max(bw, bh) * 0.006
               return (
                 <path
                   key={n.id}
-                  d={c ? `M ${a.x} ${a.y} Q ${c.x} ${c.y} ${b.x} ${b.y}` : `M ${a.x} ${a.y} L ${b.x} ${b.y}`}
+                  d={!c ? `M ${a.x} ${a.y} L ${b.x} ${b.y}` : st.shape === "elbow" ? `M ${a.x} ${a.y} L ${c.x} ${c.y} L ${b.x} ${b.y}` : `M ${a.x} ${a.y} Q ${c.x} ${c.y} ${b.x} ${b.y}`}
                   fill="none"
                   stroke="var(--ink)"
                   strokeOpacity={0.55}

@@ -92,3 +92,24 @@ describe("curved arrows", () => {
     expect(distToArrow({ x: 100, y: 0 }, a, b, "straight")).toBe(0)
   })
 })
+
+describe("bending and 90° arrows", () => {
+  it("drags a curve's middle to any point (bend round-trips through its midpoint)", async () => {
+    const { bendThrough, curveMid } = await import("./arrows")
+    const a = { x: 0, y: 0 }, b = { x: 300, y: 0 }
+    for (const bend of [0.1, 0.28, 0.8, -0.5]) {
+      const m = curveMid(a, b, bend)
+      expect(bendThrough(a, b, m)).toBeCloseTo(bend, 2)
+    }
+  })
+
+  it("90° arrows turn one corner and are clickable along both legs", async () => {
+    const { arrowPolyline, distToArrow, elbowCorner } = await import("./arrows")
+    const a = { x: 0, y: 0 }, b = { x: 200, y: 100 }
+    expect(elbowCorner(a, b)).toEqual({ x: 200, y: 0 })
+    expect(arrowPolyline(a, b, "elbow")).toHaveLength(3)
+    expect(distToArrow({ x: 100, y: 0 }, a, b, "elbow")).toBe(0)
+    expect(distToArrow({ x: 200, y: 50 }, a, b, "elbow")).toBe(0)
+    expect(distToArrow({ x: 100, y: 50 }, a, b, "elbow")).toBeGreaterThan(8)
+  })
+})

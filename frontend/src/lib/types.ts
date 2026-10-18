@@ -66,11 +66,12 @@ export type LinkNode = BaseNode & {
  *  and then follows that item around. */
 export type ArrowNode = BaseNode & {
   type: "arrow"
-  content: { x1: number; y1: number; x2: number; y2: number; from?: string | null; to?: string | null } & Partial<ArrowStyle>
+  /** bend: how far a curved arrow bows out, as a share of its length (sideways, signed). */
+  content: { x1: number; y1: number; x2: number; y2: number; from?: string | null; to?: string | null; bend?: number } & Partial<ArrowStyle>
 }
 
 /** How an arrow is drawn. Unset fields mean straight, solid, pointing at its end. */
-export type ArrowStyle = { shape: "straight" | "curved"; line: "solid" | "dotted"; heads: "end" | "start" | "both" | "none" }
+export type ArrowStyle = { shape: "straight" | "curved" | "elbow"; line: "solid" | "dotted"; heads: "end" | "start" | "both" | "none" }
 
 export type SceneNode = BoardNode | ImageNode | NoteNode | FileNode | LinkNode | ArrowNode
 
