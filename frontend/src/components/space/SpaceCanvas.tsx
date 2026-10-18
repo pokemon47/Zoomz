@@ -238,12 +238,10 @@ export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = nul
   const hasScenery = !!theme.layer
   const placedById = useMemo(() => new Map(lay.items.map((p) => [p.node.id, p])), [lay.items])
 
-  // The background dots: one grid in screen space that keeps its size at every zoom (the space
-  // feels just as big as you go deeper). Panning carries them along. Boards have no dots.
-  const travel0 = engine.travel
+  // The background dots: a fixed grid in screen space. It doesn't zoom or pan with the
+  // content, so the space feels just as big however deep you go. Boards have no dots.
   const pitch = DOT_PITCH
-  const mod = (v: number, m: number) => ((v % m) + m) % m
-  const lattice = { pitch, ox: mod(-travel0.x, DOT_PITCH), oy: mod(-travel0.y, DOT_PITCH) }
+  const lattice = { pitch, ox: 0, oy: 0 }
   const dotsStyle = { ["--dot" as string]: `${pitch}px`, backgroundPosition: `${lattice.ox}px ${lattice.oy}px` } as CSSProperties
 
   // The ground under everything, drawn in screen space: open sky (scenery) or the studio floor;
