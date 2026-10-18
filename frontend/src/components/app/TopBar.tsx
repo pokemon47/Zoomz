@@ -55,6 +55,9 @@ function UserMenu({ user, onSignOut }: { user: User; onSignOut(): Promise<void> 
         <DropdownMenuItem className="zb-menu-item" onClick={() => navigate("/settings")}>
           <Settings strokeWidth={2.25} aria-hidden /> Settings
         </DropdownMenuItem>
+        <DropdownMenuItem className="zb-menu-item" onClick={() => navigate("/ai")}>
+          <Settings strokeWidth={2.25} aria-hidden /> AI connections
+        </DropdownMenuItem>
         <DropdownMenuItem
           className="zb-menu-item"
           onClick={async () => {

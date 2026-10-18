@@ -37,6 +37,10 @@ def file_out(f: StoredFile) -> dict[str, Any]:
 
 @router.post("/spaces/{space_id}/files")
 def upload(space_id: str, request: Request, file: UploadFile = File(...), user: User = Depends(require_user), db: Session = Depends(get_db)) -> dict:
+    return store_upload(space_id, request, file, user, db)
+
+
+def store_upload(space_id, request, file, user, db, *, commit=True, file_id=None):
     space, role = require_space(db, space_id, user, "viewer")
     from .permissions import can_edit, role_at
 
@@ -90,8 +94,11 @@ def ingest(db: Session, space, user: Optional[User], stream: BinaryIO, filename:
     slow = kind == "video" and media.ffmpeg_available()
     rec.status = "processing" if slow else "ready"
     db.add(rec)
-    db.commit()
-    if slow:
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+    if slow and commit:
         worker.submit(_process_video, fid)
     return rec
 

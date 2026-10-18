@@ -40,6 +40,7 @@ _ids = itertools.count(1)
 class Conn:
     def __init__(self, ws: WebSocket, user: Optional[User], role: str):
         self.ws, self.user, self.role = ws, user, role
+        self.loop = asyncio.get_running_loop()
         self.id = f"c{next(_ids)}"
         self.presence: dict[str, Any] = {}
         self.bucket = (30.0, time.monotonic())
@@ -70,11 +71,13 @@ class Conn:
 class Hub:
     def __init__(self) -> None:
         self.rooms: dict[str, set[Conn]] = {}
-        self.loop: Optional[asyncio.AbstractEventLoop] = None
 
     async def send(self, c: Conn, msg: dict[str, Any]) -> None:
         try:
-            await c.ws.send_json(msg)
+            if asyncio.get_running_loop() is c.loop:
+                await c.ws.send_json(msg)
+            elif not c.loop.is_closed():
+                await asyncio.wrap_future(asyncio.run_coroutine_threadsafe(c.ws.send_json(msg), c.loop))
         except Exception:  # noqa: BLE001 - a dead socket is cleaned up by its own loop
             pass
 
@@ -84,14 +87,15 @@ class Hub:
 
     def publish(self, space_id: str, msg: dict[str, Any]) -> None:
         """Broadcast from any thread (e.g. the file-processing worker or a REST handler)."""
-        if self.loop and self.rooms.get(space_id):
-            asyncio.run_coroutine_threadsafe(self.broadcast(space_id, msg), self.loop)
+        for connection in list(self.rooms.get(space_id, ())):
+            if not connection.loop.is_closed():
+                asyncio.run_coroutine_threadsafe(self.send(connection, msg), connection.loop)
 
     def kick_user(self, space_id: str, user_id: str) -> None:
         """Access was removed: close that person's sockets for this space."""
         for c in list(self.rooms.get(space_id, ())):
-            if c.user and c.user.id == user_id and self.loop:
-                asyncio.run_coroutine_threadsafe(self._kick(c), self.loop)
+            if c.user and c.user.id == user_id and not c.loop.is_closed():
+                asyncio.run_coroutine_threadsafe(self._kick(c), c.loop)
 
     async def _kick(self, c: Conn) -> None:
         await self.send(c, {"t": "kicked", "reason": "Your access to this board changed."})
@@ -206,7 +210,6 @@ def _presence(msg: dict[str, Any]) -> dict[str, Any]:
 
 @router.websocket("/api/spaces/{space_id}/live")
 async def live(ws: WebSocket, space_id: str, since: Optional[int] = None, public: Optional[str] = None):
-    hub.loop = asyncio.get_running_loop()
     if not _origin_ok(ws):
         await ws.close(4403)
         return

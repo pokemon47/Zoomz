@@ -115,6 +115,17 @@ def _clean_content(type_: str, content: Any, partial: bool) -> dict[str, Any]:
     allowed = CONTENT_FIELDS[type_]
     out: dict[str, Any] = {}
     for k, v in content.items():
+        if k == "references":
+            from pydantic import TypeAdapter, ValidationError
+            from .mcp_schema import SourceReference
+            if not isinstance(v, list) or len(v) > 20:
+                raise OpError("references must contain at most 20 sources")
+            try:
+                out[k] = TypeAdapter(list[SourceReference]).validate_python(v)
+                out[k] = [item.model_dump(exclude_none=True) for item in out[k]]
+            except ValidationError:
+                raise OpError("Invalid source reference") from None
+            continue
         if k == "frame" and type_ == "board":
             if not isinstance(v, dict):
                 raise OpError("frame must be an object")
@@ -219,6 +230,7 @@ def _create(ctx: Ctx, data: Any) -> None:
     if count >= MAX_CHILDREN:
         raise OpError("This board is full. Put things into a new board inside it.")
     content = _clean_content(type_, data.get("content") or {}, partial=False)
+    _reference_access(ctx, content)
     fid = content.get("fileId")
     if type_ in ("image", "file") and fid:
         f = ctx.db.get(StoredFile, fid)
@@ -267,6 +279,7 @@ def _update(ctx: Ctx, data: Any) -> None:
         n.rank = None if patch["rank"] is None else _num(patch["rank"], -1e9, 1e9, "rank")
     if "content" in patch:
         merged = {**(n.content or {}), **_clean_content(n.type, patch["content"], partial=True)}
+        _reference_access(ctx, merged)
         n.content = merged
         n.search_text = search_text(n.type, merged)
     n.updated_at = now()
@@ -333,7 +346,10 @@ def apply(db: Session, space: Space, user: Optional[User], base_role: str, op: A
         locked.updated_at = now()
         msg = {"t": "op", "seq": locked.seq, "by": user.id if user else None, "cid": op.get("cid"), "changes": ctx.changes}
         db.add(Op(space_id=space.id, seq=locked.seq, user_id=user.id if user else None, payload={"changes": _strip_urls(ctx.changes)}))
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
         space.seq = locked.seq
         return msg
     except Exception:

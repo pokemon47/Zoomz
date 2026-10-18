@@ -55,6 +55,22 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/zenith-validator" --no-audit --no-fund @zenith-hosting/cli@0.1.4
           ZENITH_NODE_MODULES="$RUNNER_TEMP/zenith-validator/node_modules" node deploy/check_manifest.mjs
+      - name: Actual renderer screenshot tests
+        working-directory: backend
+        env:
+          ZOOMZ_BROWSER_TESTS: '1'
+          MCP_RENDER_ORIGIN: http://127.0.0.1:5178
+        run: |
+          python -m playwright install --with-deps --only-shell chromium
+          npm --prefix ../frontend run preview -- --host 127.0.0.1 --port 5178 --strictPort > "$RUNNER_TEMP/mcp-preview.log" 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..20}; do
+            if curl --silent --fail http://127.0.0.1:5178/mcp-render > /dev/null; then break; fi
+            sleep .5
+          done
+          curl --silent --fail http://127.0.0.1:5178/mcp-render > /dev/null
+          python -m pytest tests/test_mcp_preview.py -q
       - name: Build and smoke-test production containers
         run: |
           cp .env.production.example .env.production

@@ -2,6 +2,7 @@
    external, mutable store advanced by requestAnimationFrame; each frame re-renders and reads
    them (and the frame clock, for short morph animations). */
 import { useReducedMotion } from "motion/react"
+import { SourceIndicator } from "@/components/app/SourceIndicator"
 import {
   useCallback,
   useEffect,
@@ -40,7 +41,7 @@ import { getLabels, saveLabels, type Labels } from "@/lib/labels"
 import { boardLook, noteLook } from "@/lib/fills"
 import { pathTo, titleOf } from "@/lib/scene"
 import { SCENERY, themeById, type SceneryId } from "@/lib/scenery"
-import { layout, lift, localFromScreen, sortByLayer, type Cam, type Layout, type Placed, type Space, type Viewport } from "@/lib/space"
+import { layout, lift, localFromScreen, sortByLayer, type Cam, type Layout, type Placed, type Rect, type Space, type Viewport } from "@/lib/space"
 import { layerOps, topRank, type LayerMove } from "@/lib/layers"
 import { IMAGE_MAT, imageCard, imageCardHeight, newId, type Op, type SceneStore } from "@/lib/store"
 import type { ArrowNode, ArrowStyle, SceneNode } from "@/lib/types"
@@ -141,7 +142,8 @@ export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = nul
   const [vp, setVp] = useState<Viewport>({ w: window.innerWidth, h: window.innerHeight })
   const engineRef = useRef<CameraEngine | null>(null)
   if (!engineRef.current) {
-    const fit = space.fit(space.rootId, vp)
+    const scale = initialView ? Math.min(vp.w / initialView.w, vp.h / initialView.h) * 0.92 : 1
+    const fit = initialView ? space.clampScale({ b: space.rootId, s: scale, x: vp.w / 2 - (initialView.x + initialView.w / 2) * scale, y: vp.h / 2 - (initialView.y + initialView.h / 2) * scale }, vp) : space.fit(space.rootId, vp)
     const k = reduced ? 1 : 0.55
     // Start a little back from the board and walk in.
     const start: Cam = { ...fit, s: fit.s * k, x: vp.w / 2 - (vp.w / 2 - fit.x) * k, y: vp.h / 2 - (vp.h / 2 - fit.y) * k }
