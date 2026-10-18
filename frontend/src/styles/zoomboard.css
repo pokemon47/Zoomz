@@ -1108,3 +1108,7 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
 .zb-tool-dot.is-clear { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
 .zb-tool-preview.is-glass, .zb-tool-ghost.is-glass { background: var(--glass) !important; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: inset 0 0 0 1px var(--glass-edge), 0 10px 20px -8px rgba(0, 0, 0, 0.3) !important; }
 .zb-tool-preview.is-clear, .zb-tool-ghost.is-clear { background: transparent !important; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ink) 45%, transparent) !important; }
+
+/* Boards are plain, solid surfaces: no dots on their faces or on the floor once you're inside.
+   Only the background (the studio floor) keeps its dots. */
+.zb-board .zb-inner-floor, .zb-room:not(.zb-ground) { background-image: none; }

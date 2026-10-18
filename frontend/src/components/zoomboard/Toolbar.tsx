@@ -7,7 +7,7 @@ import { colorById } from "@/lib/colors"
 import type { ArrowStyle } from "@/lib/types"
 import { ArrowGlyph, ArrowStyleControls } from "./ArrowStyle"
 import { FillPicker } from "./FillPicker"
-import { boardLook, type Look } from "@/lib/fills"
+import { SEE_THROUGH_ENABLED, boardLook, type Look } from "@/lib/fills"
 
 export type ToolKind = "note" | "board" | "arrow"
 /** What a new item looks like: an arrow's style, or a note's / board's colour. */
@@ -51,6 +51,7 @@ export function lastLook(): ToolLook {
     if (colorById(v)) return { fill: "full", color: v } // older saved choice: just a colour
     try {
       const l = JSON.parse(v) as Look
+      if (!SEE_THROUGH_ENABLED && (l.fill === "glass" || l.fill === "clear")) return fallback
       return typeof l.fill === "string" ? { fill: l.fill, color: colorById(l.color) ? l.color : null } : fallback
     } catch {
       return fallback

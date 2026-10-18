@@ -239,9 +239,9 @@ export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = nul
   const hasScenery = !!theme.layer
   const placedById = useMemo(() => new Map(lay.items.map((p) => [p.node.id, p])), [lay.items])
 
-  // The dots: one grid in screen space shared by the ground, every floor and every board face,
-  // so the space never looks smaller as you go deeper and stepping into a board is seamless.
-  // They keep one size; zooming gives them a brief push in or out that springs back.
+  // The background dots: one grid in screen space that keeps its size at every zoom (the space
+  // feels just as big as you go deeper); zooming nudges it ever so slightly, then it settles.
+  // Boards are plain, solid surfaces without dots.
   const travel0 = engine.travel
   const tNow = performance.now()
   const dz = travel0.zoom - dotZoom.current.z
@@ -251,7 +251,8 @@ export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = nul
   dotZoom.current.pulse = reduced ? 0 : dotZoom.current.pulse * Math.exp(-dt / 140) + dz
   if (Math.abs(dotZoom.current.pulse) > 0.002) animUntil.current = Math.max(animUntil.current, tNow + 48)
   else dotZoom.current.pulse = 0
-  const dotScale = Math.exp(Math.max(-0.6, Math.min(0.6, dotZoom.current.pulse)))
+  // Barely there: a few percent at most, just enough to feel the zoom.
+  const dotScale = Math.exp(Math.max(-0.05, Math.min(0.05, dotZoom.current.pulse * 0.12)))
   const pitch = DOT_PITCH * dotScale
   const mod = (v: number, m: number) => ((v % m) + m) % m
   // Panning carries the dots along; a zoom pulse scales them about the middle of the view.

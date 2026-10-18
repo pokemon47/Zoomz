@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { boardLook, noteLook } from "./fills"
+import { SEE_THROUGH_ENABLED, boardLook, noteLook } from "./fills"
 
 describe("board and note fills", () => {
   it("plain boards are the background's own colour, solid", () => {
@@ -16,13 +16,17 @@ describe("board and note fills", () => {
   it("a colour from before fills existed means full colour", () => {
     expect(boardLook({ color: "sky" }).fill).toBe("full")
   })
-  it("glass and clear are see-through, without a colour", () => {
+  it.skipIf(!SEE_THROUGH_ENABLED)("glass and clear are see-through, without a colour", () => {
     expect(boardLook({ fill: "glass" }).fill).toBe("glass")
     expect(boardLook({ fill: "glass", color: "mint" }).color).toBeUndefined()
     expect(boardLook({ fill: "clear" }).surface).toBe("transparent")
   })
-  it("notes are lemon by default, or glass", () => {
+  it("notes are lemon by default", () => {
     expect(noteLook({})).toMatchObject({ fill: "full", color: { id: "lemon" } })
-    expect(noteLook({ fill: "glass" }).fill).toBe("glass")
+  })
+  it.skipIf(SEE_THROUGH_ENABLED)("while glass and clear are switched off, they show as plain", () => {
+    expect(boardLook({ fill: "glass" }).fill).toBe("plain")
+    expect(boardLook({ fill: "clear", color: "mint" }).fill).toBe("plain")
+    expect(noteLook({ fill: "glass" }).fill).toBe("full")
   })
 })

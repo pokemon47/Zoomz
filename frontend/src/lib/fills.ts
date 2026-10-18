@@ -24,9 +24,14 @@ export type BoardLook = {
 
 const SURFACE = "var(--depth-0)"
 
+/** Glass and Clear are switched off for now (they need more work); items saved with them show
+ *  as plain boards / lemon notes until they're turned back on. The code stays in place. */
+export const SEE_THROUGH_ENABLED = false
+
 export function boardLook(content: { color?: string | null; fill?: string | null }): BoardLook {
   const color = colorById(content.color)
-  const fill = (content.fill as BoardFill | undefined) ?? (color ? "full" : "plain")
+  let fill = (content.fill as BoardFill | undefined) ?? (color ? "full" : "plain")
+  if (!SEE_THROUGH_ENABLED && (fill === "glass" || fill === "clear")) fill = "plain"
   if (fill === "glass") return { fill, surface: "var(--glass)" }
   if (fill === "clear") return { fill, surface: "transparent" }
   if (fill === "outline" && color) return { fill, color, surface: SURFACE, rim: color.face, layer: color.face }
@@ -35,5 +40,5 @@ export function boardLook(content: { color?: string | null; fill?: string | null
 }
 
 export function noteLook(content: { color?: string | null; fill?: string | null }): { fill: NoteFill; color: CardColor } {
-  return { fill: content.fill === "glass" ? "glass" : "full", color: colorById(content.color) ?? colorById("lemon")! }
+  return { fill: SEE_THROUGH_ENABLED && content.fill === "glass" ? "glass" : "full", color: colorById(content.color) ?? colorById("lemon")! }
 }

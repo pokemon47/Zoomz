@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { CARD_COLORS } from "@/lib/colors"
-import type { BoardFill, Look } from "@/lib/fills"
+import { SEE_THROUGH_ENABLED, type BoardFill, type Look } from "@/lib/fills"
 
 type Props = {
   kind: "note" | "board"
@@ -56,21 +56,25 @@ export function FillPicker({ kind, value, onChange, size = 24 }: Props) {
           )
         })}
       </div>
+      {(kind === "board" || SEE_THROUGH_ENABLED) && (
       <div className="zb-fill-special" role="radiogroup" aria-label="Surface">
         {kind === "board" && (
           <button type="button" role="radio" aria-checked={value.fill === "plain"} className="zb-fill-chip is-plain" onClick={() => pick("plain", null)}>
             <i aria-hidden /> Plain
           </button>
         )}
-        <button type="button" role="radio" aria-checked={value.fill === "glass"} className="zb-fill-chip is-glass" onClick={() => pick("glass", null)}>
-          <i aria-hidden /> Glass
-        </button>
-        {kind === "board" && (
+        {SEE_THROUGH_ENABLED && (
+          <button type="button" role="radio" aria-checked={value.fill === "glass"} className="zb-fill-chip is-glass" onClick={() => pick("glass", null)}>
+            <i aria-hidden /> Glass
+          </button>
+        )}
+        {SEE_THROUGH_ENABLED && kind === "board" && (
           <button type="button" role="radio" aria-checked={value.fill === "clear"} className="zb-fill-chip is-clear" onClick={() => pick("clear", null)}>
             <i aria-hidden /> Clear
           </button>
         )}
       </div>
+      )}
     </div>
   )
 }
