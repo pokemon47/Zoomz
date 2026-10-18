@@ -175,7 +175,6 @@ export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = nul
   const pointerAt = useRef<{ x: number; y: number } | null>(null)
   const touches = useRef(new Map<number, { x: number; y: number }>())
   const pinch = useRef<{ d: number; mx: number; my: number } | null>(null)
-  const dotZoom = useRef({ z: 0, t: performance.now(), pulse: 0 })
 
   const select = useCallback((ids: string[]) => setSelection(ids), [])
   const selected = useMemo(() => new Set(selection), [selection])
@@ -240,27 +239,11 @@ export function SpaceCanvas({ store, scenery, status, crumbsTarget, follow = nul
   const placedById = useMemo(() => new Map(lay.items.map((p) => [p.node.id, p])), [lay.items])
 
   // The background dots: one grid in screen space that keeps its size at every zoom (the space
-  // feels just as big as you go deeper); zooming nudges it ever so slightly, then it settles.
-  // Boards are plain, solid surfaces without dots.
+  // feels just as big as you go deeper). Panning carries them along. Boards have no dots.
   const travel0 = engine.travel
-  const tNow = performance.now()
-  const dz = travel0.zoom - dotZoom.current.z
-  const dt = Math.min(64, tNow - dotZoom.current.t)
-  dotZoom.current.z = travel0.zoom
-  dotZoom.current.t = tNow
-  dotZoom.current.pulse = reduced ? 0 : dotZoom.current.pulse * Math.exp(-dt / 140) + dz
-  if (Math.abs(dotZoom.current.pulse) > 0.002) animUntil.current = Math.max(animUntil.current, tNow + 48)
-  else dotZoom.current.pulse = 0
-  // Barely there: a few percent at most, just enough to feel the zoom.
-  const dotScale = Math.exp(Math.max(-0.05, Math.min(0.05, dotZoom.current.pulse * 0.12)))
-  const pitch = DOT_PITCH * dotScale
+  const pitch = DOT_PITCH
   const mod = (v: number, m: number) => ((v % m) + m) % m
-  // Panning carries the dots along; a zoom pulse scales them about the middle of the view.
-  const lattice = {
-    pitch,
-    ox: vp.w / 2 + mod(-travel0.x - vp.w / 2, DOT_PITCH) * dotScale,
-    oy: vp.h / 2 + mod(-travel0.y - vp.h / 2, DOT_PITCH) * dotScale,
-  }
+  const lattice = { pitch, ox: mod(-travel0.x, DOT_PITCH), oy: mod(-travel0.y, DOT_PITCH) }
   const dotsStyle = { ["--dot" as string]: `${pitch}px`, backgroundPosition: `${lattice.ox}px ${lattice.oy}px` } as CSSProperties
 
   // The ground under everything, drawn in screen space: open sky (scenery) or the studio floor;
