@@ -78,3 +78,17 @@ describe("arrows on the canvas", () => {
     expect([lone.node.content.from, lone.node.content.to]).toEqual([null, null])
   })
 })
+
+describe("curved arrows", () => {
+  it("bend to one side and are clickable along the curve, not the straight chord", async () => {
+    const { arrowPolyline, curveControl, distToArrow } = await import("./arrows")
+    const a = { x: 0, y: 0 }, b = { x: 200, y: 0 }
+    const c = curveControl(a, b)
+    expect(c.x).toBe(100)
+    expect(Math.abs(c.y)).toBeGreaterThan(20)
+    const mid = arrowPolyline(a, b, "curved")[8]
+    expect(distToArrow(mid, a, b, "curved")).toBeLessThan(0.5)
+    expect(distToArrow({ x: 100, y: 0 }, a, b, "curved")).toBeGreaterThan(8)
+    expect(distToArrow({ x: 100, y: 0 }, a, b, "straight")).toBe(0)
+  })
+})

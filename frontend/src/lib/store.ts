@@ -407,10 +407,14 @@ export class SceneStore {
 
   private send(op: Op) {
     if (this.local) return
-    const cid = newId("op")
-    const ids = opIds(op)
-    const entry: Pending = { cid, op: sendable(op), sent: false, ids }
-    this.pending.push(entry)
+    // The server takes plain operations or one flat batch of up to 500 (undoing a multi-item
+    // delete, for instance, builds a batch of batches), so flatten, and split very large ones.
+    const flat = flatten(op).map(sendable)
+    for (let i = 0; i < flat.length; i += MAX_BATCH) {
+      const chunk = flat.slice(i, i + MAX_BATCH)
+      const one: Op = chunk.length === 1 ? chunk[0] : { type: "batch", ops: chunk }
+      this.pending.push({ cid: newId("op"), op: one, sent: false, ids: opIds(one) })
+    }
     this.flush()
   }
 
@@ -572,6 +576,14 @@ function opIds(op: Op): string[] {
 }
 
 /** What goes over the wire: no local blob URLs or derived file facts. */
+/** Most operations the server accepts in one batch. */
+const MAX_BATCH = 500
+
+/** The plain operations inside an operation, in order (batches of batches unpacked). */
+export function flatten(op: Op): Op[] {
+  return op.type === "batch" ? op.ops.flatMap(flatten) : [op]
+}
+
 function sendable(op: Op): Op {
   if (op.type === "batch") return { type: "batch", ops: op.ops.map(sendable) }
   if (op.type !== "create") return op

@@ -1,7 +1,40 @@
 // Arrows: straight connectors on a board. Each end is a free point, or attached to another item
 // on the same board, in which case it sits on that item's edge, on the line between the two ends.
 
-import type { ArrowNode, SceneNode } from "./types"
+import type { ArrowNode, ArrowStyle, SceneNode } from "./types"
+
+export const DEFAULT_ARROW: ArrowStyle = { shape: "straight", line: "solid", heads: "end" }
+
+export function styleOf(n: ArrowNode): ArrowStyle {
+  const c = n.content
+  return { shape: c.shape ?? "straight", line: c.line ?? "solid", heads: c.heads ?? "end" }
+}
+
+/** The bend of a curved arrow: a control point off the middle of the line, to its left. */
+export function curveControl(a: Pt, b: Pt): Pt {
+  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
+  const dx = b.x - a.x, dy = b.y - a.y
+  const k = 0.28
+  return { x: mx + dy * k, y: my - dx * k }
+}
+
+/** Points along the arrow (for clicking it): the line itself, or its curve. */
+export function arrowPolyline(a: Pt, b: Pt, shape: ArrowStyle["shape"]): Pt[] {
+  if (shape !== "curved") return [a, b]
+  const c = curveControl(a, b)
+  return Array.from({ length: 17 }, (_, i) => {
+    const t = i / 16, u = 1 - t
+    return { x: u * u * a.x + 2 * u * t * c.x + t * t * b.x, y: u * u * a.y + 2 * u * t * c.y + t * t * b.y }
+  })
+}
+
+/** Distance from p to an arrow drawn between a and b. */
+export function distToArrow(p: Pt, a: Pt, b: Pt, shape: ArrowStyle["shape"]): number {
+  const pts = arrowPolyline(a, b, shape)
+  let d = Infinity
+  for (let i = 1; i < pts.length; i++) d = Math.min(d, distToSegment(p, pts[i - 1], pts[i]))
+  return d
+}
 
 export type Pt = { x: number; y: number }
 export type Box = { x: number; y: number; w: number; h: number }

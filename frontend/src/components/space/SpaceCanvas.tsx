@@ -33,14 +33,15 @@ import { copyNodes, lastClip, parseClip, pasteOps } from "@/lib/clipboard"
 import { MOTION, SPACE, ZOOM, cardBoxFactor, floorFor, perspectiveFor } from "@/lib/constants"
 import { IMPORT_GRID, IMPORT_LIMITS, countFiles, fileCard, planFolder, readDrop, type BoardPlan, type FolderTree } from "@/lib/folderImport"
 import { api, apiUrl } from "@/lib/http"
-import { arrowEnds, arrowPatch, attachable, distToSegment, isArrow, type Box, type Pt } from "@/lib/arrows"
+import { DEFAULT_ARROW, arrowEnds, arrowPatch, attachable, distToArrow, isArrow, styleOf, type Box, type Pt } from "@/lib/arrows"
 import { getLabels, saveLabels, type Labels } from "@/lib/labels"
 import { pathTo, titleOf } from "@/lib/scene"
 import { SCENERY, themeById, type SceneryId } from "@/lib/scenery"
 import { layout, lift, localFromScreen, sortByLayer, type Cam, type Layout, type Placed, type Space, type Viewport } from "@/lib/space"
 import { layerOps, topRank, type LayerMove } from "@/lib/layers"
 import { IMAGE_MAT, imageCard, imageCardHeight, newId, type Op, type SceneStore } from "@/lib/store"
-import type { ArrowNode, SceneNode } from "@/lib/types"
+import type { ArrowNode, ArrowStyle, SceneNode } from "@/lib/types"
+import { ArrowStyleControls } from "@/components/zoomboard/ArrowStyle"
 import { ArrowItem } from "./ArrowItem"
 import { ContextMenu, type ContextAction } from "./ContextMenu"
 import { Lightbox } from "./Lightbox"
@@ -297,7 +298,7 @@ export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToa
       if (p.opacity < 0.2 || p.node.id === exclude) continue
       if (isArrow(p.node)) {
         const [a, b] = arrowScreenEnds(p)
-        if (distToSegment({ x: px, y: py }, a, b) > 8) continue
+        if (distToArrow({ x: px, y: py }, a, b, styleOf(p.node).shape) > 8) continue
       } else if (px < p.x || py < p.y || px > p.x + p.node.w * p.scale || py > p.y + p.node.h * p.scale) continue
       if (!best || p.order > best.order) best = p
     }
@@ -574,7 +575,7 @@ export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToa
    * middle of the view), on whichever board is there. Notes and boards open for typing at once.
    */
   const place = useCallback(
-    (kind: ToolKind, client: { x: number; y: number } | null) => {
+    (kind: ToolKind, client: { x: number; y: number } | null, arrowStyle?: ArrowStyle) => {
       const r = viewportRef.current?.getBoundingClientRect()
       const pt = client && r ? { x: client.x - r.left, y: client.y - r.top } : { x: engine.vp.w / 2, y: engine.vp.h / 2 }
       const board = boardAt(pt.x, pt.y, [], true)
@@ -590,7 +591,9 @@ export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToa
         const mid = localAt(board, pt.x, pt.y)
         const start = from ? { x: space.at(from).x + from.w, y: space.at(from).y + from.h / 2 } : { x: mid.x - half, y: mid.y }
         const g = arrowPatch(start, { x: start.x + half * 2, y: start.y })
-        node = { id: newId("arrow"), type: "arrow", parentId: board, x: g.x, y: g.y, z: 0, w: g.w, h: g.h, rank, content: { ...g.content, from: from?.id ?? null, to: null } }
+        // The style picked in the toolbar (the A key uses the last one picked there too).
+        const style = arrowStyle ?? lastArrowStyle()
+        node = { id: newId("arrow"), type: "arrow", parentId: board, x: g.x, y: g.y, z: 0, w: g.w, h: g.h, rank, content: { ...g.content, from: from?.id ?? null, to: null, ...style } }
       } else if (kind === "note") {
         const w = 220, h = 190, z = 80 + Math.round(Math.random() * 30)
         const ss = screenScaleIn(board, z)
@@ -1339,7 +1342,7 @@ export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToa
         {ordered.map((p) => {
           if (isArrow(p.node)) {
             const [a, b] = arrowEndsFor(p)
-            return <ArrowItem key={p.node.id} id={p.node.id} a={a} b={b} scale={p.scale} order={p.order} opacity={p.opacity} selected={selected.has(p.node.id)} hidden={held === p.node.id} />
+            return <ArrowItem key={p.node.id} id={p.node.id} a={a} b={b} style={styleOf(p.node)} scale={p.scale} order={p.order} opacity={p.opacity} selected={selected.has(p.node.id)} hidden={held === p.node.id} />
           }
           return (
           <Item
@@ -1363,6 +1366,20 @@ export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToa
           />
           )
         })}
+        {arrowSel && !endDrag && (
+          <ArrowStyleBar
+            at={(() => {
+              const [a, b] = arrowEndsFor(arrowSel)
+              // Above the arrow, or below it when it's near the top; never off the sides.
+              const below = Math.min(a.y, b.y) < (vp.w < 520 ? 240 : 150)
+              const half = Math.min(180, (vp.w - 100) / 2)
+              return { x: Math.min(Math.max((a.x + b.x) / 2, half + 84), vp.w - half - 8), y: below ? Math.max(a.y, b.y) : Math.min(a.y, b.y), below }
+            })()}
+            value={styleOf(arrowSel.node as ArrowNode)}
+            // Only the setting you changed, so quick clicks never undo each other.
+            onChange={(change) => store.commit({ type: "update", id: arrowSel.node.id, patch: { content: change } }, "arrow style")}
+          />
+        )}
         {arrowSel &&
           !endDrag &&
           arrowEndsFor(arrowSel).map((pt, i) => (
@@ -1466,6 +1483,23 @@ export function SpaceCanvas({ store, scenery, follow = null, onStopFollow, onToa
       <div className="sr-only-zb" aria-live="polite">
         {announcement || `Now in ${focusTitle}`}
       </div>
+    </div>
+  )
+}
+
+function lastArrowStyle(): ArrowStyle {
+  try {
+    return { ...DEFAULT_ARROW, ...(JSON.parse(localStorage.getItem("zoomz.arrowStyle") ?? "{}") as Partial<ArrowStyle>) }
+  } catch {
+    return DEFAULT_ARROW
+  }
+}
+
+/** A small bar above a selected arrow to change its shape, line and direction. */
+function ArrowStyleBar({ at, value, onChange }: { at: { x: number; y: number; below: boolean }; value: ArrowStyle; onChange(change: Partial<ArrowStyle>): void }) {
+  return (
+    <div className={`zb-arrow-bar${at.below ? " is-below" : ""}`} style={{ left: at.x, top: at.y }} data-no-drag onPointerDown={(e) => e.stopPropagation()}>
+      <ArrowStyleControls value={value} onChange={(_, change) => onChange(change)} compact />
     </div>
   )
 }

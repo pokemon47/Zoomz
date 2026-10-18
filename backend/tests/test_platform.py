@@ -697,3 +697,37 @@ def test_export_then_import_rebuilds_the_canvas_exactly(make_client):
     before = len(c.get("/api/spaces").json()["mine"])
     assert c.post("/api/spaces/import", files={"file": ("x.zip", b"nope", "application/zip")}, headers=H).status_code == 422
     assert len(c.get("/api/spaces").json()["mine"]) == before
+
+
+def test_undoing_a_multi_item_delete_is_accepted(make_client):
+    # Undo of "delete these two" re-creates each (a board with its contents is itself a batch),
+    # so the client sends a batch of batches.
+    c = make_client("undo-del@example.com")
+    sid = first_space(c)["id"]
+    root = scene(c, sid)["rootBoardId"]
+    b, kid, n = uid("board"), uid("note"), uid("note")
+    board = {"id": b, "type": "board", "parentId": root, "x": 0, "y": 0, "w": 360, "h": 300, "content": {"title": "B"}}
+    inner = {"id": kid, "type": "note", "parentId": b, "x": 5, "y": 5, "w": 220, "h": 190, "content": {"title": "K", "body": ""}}
+    note = {"id": n, "type": "note", "parentId": root, "x": 400, "y": 0, "w": 220, "h": 190, "content": {"title": "N", "body": ""}}
+    assert op(c, sid, {"type": "batch", "ops": [{"type": "create", "node": x} for x in (board, inner, note)]}).status_code == 200
+    assert op(c, sid, {"type": "batch", "ops": [{"type": "delete", "id": b}, {"type": "delete", "id": n}]}).status_code == 200
+    undo = {"type": "batch", "ops": [
+        {"type": "batch", "ops": [{"type": "create", "node": note}]},
+        {"type": "batch", "ops": [{"type": "create", "node": board}, {"type": "create", "node": inner}]},
+    ]}
+    r = op(c, sid, undo)
+    assert r.status_code == 200, r.text
+    ids = {x["id"] for x in scene(c, sid)["nodes"]}
+    assert {b, kid, n} <= ids
+
+
+def test_arrow_styles(make_client):
+    c = make_client("arrow-style@example.com")
+    sid = first_space(c)["id"]
+    root = scene(c, sid)["rootBoardId"]
+    aid = uid("arrow")
+    node = {"id": aid, "type": "arrow", "parentId": root, "x": 0, "y": 0, "w": 100, "h": 30, "content": {"shape": "curved", "line": "dotted", "heads": "both"}}
+    r = op(c, sid, {"type": "create", "node": node})
+    assert r.status_code == 200 and {k: r.json()["changes"][0]["node"]["content"][k] for k in ("shape", "line", "heads")} == {"shape": "curved", "line": "dotted", "heads": "both"}
+    assert op(c, sid, {"type": "update", "id": aid, "patch": {"content": {"heads": "none"}}}).status_code == 200
+    assert op(c, sid, {"type": "update", "id": aid, "patch": {"content": {"shape": "zigzag"}}}).status_code == 400

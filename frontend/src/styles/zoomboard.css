@@ -885,7 +885,8 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
 .zb-arrow-hit { stroke: transparent; stroke-linecap: round; pointer-events: stroke; cursor: pointer; }
 .zb-arrow-line { stroke: var(--ink); stroke-opacity: 0.9; stroke-linecap: round; transition: stroke 140ms ease-out; }
 .zb-arrow-head { fill: var(--ink); fill-opacity: 0.9; transition: fill 140ms ease-out; }
-.zb-arrow-casing { stroke: var(--surface); stroke-opacity: 0.85; stroke-linecap: round; stroke-linejoin: round; fill: var(--surface); fill-opacity: 0.85; }
+.zb-arrow-casing { stroke: var(--surface); stroke-opacity: 0.85; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.zb-arrow-casing.is-head { fill: var(--surface); fill-opacity: 0.85; }
 .zb-arrow-glow { stroke: var(--cobalt); stroke-opacity: 0.22; stroke-linecap: round; }
 .zb-arrow:hover .zb-arrow-line, .zb-arrow.is-selected .zb-arrow-line { stroke: var(--cobalt); stroke-opacity: 1; }
 .zb-arrow:hover .zb-arrow-head, .zb-arrow.is-selected .zb-arrow-head { fill: var(--cobalt); fill-opacity: 1; }
@@ -958,3 +959,46 @@ li[aria-selected="true"] .zb-result { background: var(--surface-sunk); }
 .zb-board.zb-far .zb-label-edit { flex-direction: column; gap: calc(4px / var(--s, 1)); }
 .zb-board.zb-far .zb-label-edit input.zb-inner-title { font-size: clamp(17px, calc(13px / var(--s, 1)), 90px); padding: 0.2em 0.45em; border-radius: 0.4em; min-width: calc(220px / var(--s, 1)); }
 .zb-board.zb-far .zb-label-edit input.zb-inner-caption { font-size: clamp(11px, calc(10px / var(--s, 1)), 60px); padding: 0.25em 0.6em; border-radius: 0.5em; min-width: calc(220px / var(--s, 1)); }
+
+/* ---------- arrow styles: the toolbar's arrow menu and the bar over a selected arrow ---------- */
+.zb-tool.is-open { background: var(--surface-sunk); color: var(--cobalt); }
+.zb-arrow-glyph { display: block; }
+.zb-arrow-flyout {
+  position: fixed; z-index: 30;
+  display: flex; flex-direction: column; gap: 10px; padding: 10px; border-radius: var(--radius-lg);
+  background: var(--surface); box-shadow: var(--zb-l2); transform-origin: left center;
+  animation: zb-flyout-in 180ms var(--zb-spring) both;
+}
+@keyframes zb-flyout-in { from { opacity: 0; transform: translateX(-8px) scale(0.96); } }
+.zb-arrow-style { display: flex; flex-direction: column; gap: 6px; }
+.zb-arrow-style-row { display: flex; gap: 4px; padding: 3px; border-radius: var(--radius-full); background: var(--surface-sunk); }
+.zb-arrow-opt {
+  flex: 1; min-width: 40px; height: 30px; padding: 0 6px; border: 0; border-radius: var(--radius-full);
+  display: grid; place-items: center; background: none; color: var(--ink-muted); cursor: pointer;
+  transition: background 140ms ease-out, color 140ms ease-out, box-shadow 200ms var(--zb-spring);
+}
+.zb-arrow-opt:hover { color: var(--ink); }
+.zb-arrow-opt[aria-checked="true"] { background: var(--surface); color: var(--cobalt); box-shadow: 0 2px 0 0 var(--surface-side); }
+.zb-arrow-opt:focus-visible { outline: var(--focus) solid var(--cobalt); outline-offset: 1px; }
+.zb-arrow-drag {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1.5px dashed var(--surface-side); border-radius: var(--radius-md);
+  background: none; color: var(--ink); font: 600 12px/1.2 var(--zb-sans); cursor: grab; touch-action: none;
+  transition: border-color 140ms ease-out, transform 200ms var(--zb-spring);
+}
+.zb-arrow-drag span { color: var(--ink-muted); }
+.zb-arrow-drag:hover { border-color: var(--cobalt); transform: translateY(-1px); }
+.zb-arrow-drag:active, .zb-arrow-drag.is-dragging { cursor: grabbing; }
+.zb-arrow-bar {
+  position: absolute; z-index: 45950; transform: translate(-50%, calc(-100% - 18px)); padding: 6px; border-radius: var(--radius-lg);
+  background: var(--surface); box-shadow: var(--zb-l2); animation: zb-ctx-in 140ms var(--zb-spring) both;
+}
+.zb-arrow-style.is-compact { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.zb-arrow-bar { max-width: min(360px, calc(100vw - 100px)); }
+.zb-arrow-bar.is-below { transform: translate(-50%, 18px); }
+.zb-arrow-style.is-compact .zb-arrow-opt { min-width: 32px; height: 26px; padding: 0 3px; }
+@media (max-width: 720px) {
+}
+@media (prefers-reduced-motion: reduce) { .zb-arrow-flyout, .zb-arrow-bar { animation: none; } }
+/* While an arrow is being carried out of the menu, the menu steps aside so you can drop anywhere. */
+.zb-arrow-flyout.is-carrying { opacity: 0.25; pointer-events: none; transition: opacity 160ms ease-out; }
+.zb-arrow-flyout.is-carrying .zb-arrow-drag { pointer-events: auto; }

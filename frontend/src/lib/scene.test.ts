@@ -458,3 +458,11 @@ describe("copy and paste", () => {
     expect(st.space.index.children.get("dst") ?? []).toHaveLength(0)
   })
 })
+
+describe("sending undo of a multi-item delete", () => {
+  it("unpacks a batch of batches into plain operations", async () => {
+    const { flatten } = await import("./store")
+    const op = { type: "batch", ops: [{ type: "batch", ops: [{ type: "delete", id: "a" }] }, { type: "batch", ops: [{ type: "delete", id: "b" }, { type: "batch", ops: [] }] }, { type: "delete", id: "c" }] } as const
+    expect(flatten(op as never).map((o) => (o as { id: string }).id)).toEqual(["a", "b", "c"])
+  })
+})

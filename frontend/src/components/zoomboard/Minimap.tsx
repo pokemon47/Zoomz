@@ -1,7 +1,7 @@
 import { Eye } from "lucide-react"
 import { useRef, useState, type PointerEvent } from "react"
 import { DEPTH_DOT, floorFor } from "@/lib/constants"
-import { arrowEnds } from "@/lib/arrows"
+import { arrowEnds, curveControl, styleOf } from "@/lib/arrows"
 import { fileKind } from "@/lib/files"
 import { titleOf } from "@/lib/scene"
 import type { Cam, Space, Viewport } from "@/lib/space"
@@ -138,7 +138,21 @@ export function Minimap({ space, focus, cam, vp, onCenter, onHide }: Props) {
                 const tp = space.at(t)
                 return { x: tp.x, y: tp.y, w: t.w, h: t.h }
               })
-              return <line key={n.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="var(--ink)" strokeOpacity={0.55} strokeWidth={Math.max(bw, bh) * 0.006} strokeLinecap="round" />
+              const st = styleOf(n)
+              const c = st.shape === "curved" ? curveControl(a, b) : null
+              const sw = Math.max(bw, bh) * 0.006
+              return (
+                <path
+                  key={n.id}
+                  d={c ? `M ${a.x} ${a.y} Q ${c.x} ${c.y} ${b.x} ${b.y}` : `M ${a.x} ${a.y} L ${b.x} ${b.y}`}
+                  fill="none"
+                  stroke="var(--ink)"
+                  strokeOpacity={0.55}
+                  strokeWidth={sw}
+                  strokeLinecap="round"
+                  strokeDasharray={st.line === "dotted" ? `0 ${sw * 2.4}` : undefined}
+                />
+              )
             }
             return <rect key={n.id} x={p.x} y={p.y} width={n.w} height={n.h} rx={r} fill={TONE[fileKind(n.content.mime ?? "", n.content.title).tone] ?? "var(--lemon)"} />
           })}

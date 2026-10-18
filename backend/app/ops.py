@@ -36,8 +36,10 @@ CONTENT_FIELDS: dict[str, dict[str, int]] = {
     "link": {"url": 2000, "title": 300, "description": 600, "image": 2000, "site": 120, "embed": 2000},
     # An arrow between two points of its board; either end may be attached to another item
     # on the same board (`from` / `to` are that item's id).
-    "arrow": {"from": 64, "to": 64},
+    "arrow": {"from": 64, "to": 64, "shape": 10, "line": 10, "heads": 10},
 }
+#: Allowed values for arrow styles (unset = straight, solid, pointing at the end).
+ARROW_STYLES = {"shape": {"straight", "curved"}, "line": {"solid", "dotted"}, "heads": {"end", "start", "both", "none"}}
 #: Numeric content fields: arrow end points, relative to the arrow's own x/y, in board units.
 NUM_FIELDS: dict[str, tuple[str, ...]] = {"arrow": ("x1", "y1", "x2", "y2")}
 DEFAULT_FRAME = {"x": 0, "y": 0, "w": 1300, "h": 1100}
@@ -133,6 +135,9 @@ def _clean_content(type_: str, content: Any, partial: bool) -> dict[str, Any]:
         out.setdefault("title", "Untitled board")
         out.setdefault("frame", dict(DEFAULT_FRAME))
     if type_ == "arrow":
+        for k, allowed_values in ARROW_STYLES.items():
+            if out.get(k) is not None and out[k] not in allowed_values:
+                raise OpError(f"arrow {k} must be one of: {', '.join(sorted(allowed_values))}")
         for k in ("from", "to"):
             if out.get(k) and not ID_RE.match(out[k]):
                 raise OpError("arrow ends must point at an item id")
@@ -281,11 +286,27 @@ def _delete(ctx: Ctx, data: Any) -> None:
 HANDLERS = {"create": _create, "update": _update, "delete": _delete}
 
 
+def _flatten(ops: Any, depth: int = 0) -> Any:
+    """Batches may nest (an undo of several deletes is a batch of re-create batches)."""
+    if not isinstance(ops, list) or depth > 8:
+        return ops
+    out: list[Any] = []
+    for o in ops:
+        if isinstance(o, dict) and o.get("type") == "batch":
+            inner = _flatten(o.get("ops"), depth + 1)
+            if not isinstance(inner, list):
+                return None
+            out += inner
+        else:
+            out.append(o)
+    return out
+
+
 def apply(db: Session, space: Space, user: Optional[User], base_role: str, op: Any) -> dict[str, Any]:
     """Apply one operation (or a batch) atomically. Returns the broadcast message."""
     if not isinstance(op, dict) or op.get("type") not in (*HANDLERS, "batch"):
         raise OpError("unknown operation")
-    ops = op.get("ops") if op["type"] == "batch" else [op]
+    ops = _flatten(op.get("ops")) if op["type"] == "batch" else [op]
     if not isinstance(ops, list) or not ops or len(ops) > MAX_BATCH:
         raise OpError("a batch needs 1–500 operations")
     try:
