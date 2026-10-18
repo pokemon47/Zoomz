@@ -8,7 +8,7 @@ Paths beginning `app/` in this document are relative to `backend/`. Frontend pat
 
 `ops.apply(..., commit=False)` permits the MCP service to commit scene changes, revision, retry result, approval consumption, and checkpoint together. Normal editor callers retain the default commit behavior. After commit, the existing `live.hub` publishes the same operation messages the editor already understands. Media derivatives use the existing upload processor. No separate scene representation, AI inference service, or gateway exists.
 
-Alembic revision `a90b4a770001` adds OAuth clients, pending grants, connections, hashed credentials, tasks, retry records, approvals, and audit records. SQLite transactions use `BEGIN IMMEDIATE`; PostgreSQL uses row locks. PostgreSQL concurrency remains unverified locally.
+Alembic revision `a90b4a770001` adds OAuth clients, pending grants, connections, hashed credentials, tasks, retry records, approvals, and audit records. SQLite transactions use `BEGIN IMMEDIATE`; PostgreSQL uses row locks. PostgreSQL 16.15 migrations, concurrency and restart persistence pass locally. Production PostgreSQL 17/container verification remains open.
 
 The frontend adds `/ai` and `/mcp-connect`, a compact draft-status panel, and a selected-element source indicator. These follow existing editor controls. Camera and coordinate transforms are unchanged. The draft panel polls every three seconds outside the canvas render loop.
 
@@ -101,7 +101,7 @@ Interrupted tasks can also pause. Completed and cancelled tasks are terminal. Di
 
 Pause serializes with writes against the space and prevents subsequent AI mutations under that user's paused board, including attempts to omit `task_id`. Manual editor changes remain allowed. Resume, checkpoint, and finalization require the latest revision; pausing and cancellation do not require a fresh revision. Resume does not resume provider inference. A later conversation can list tasks, inspect the checkpoint and board, and continue using current revisions and available sources.
 
-Checkpoints support `summary`, `completed_phases`, `outstanding_work`, `missing_sources`, and `available_sources`. They are bounded to 32,000 serialized characters. Task-associated mutations cannot escape the task board subtree. Browser-visible progression and Pause have partial real-browser evidence. Full UI resume and PostgreSQL concurrency still need acceptance verification.
+Checkpoints support `summary`, `completed_phases`, `outstanding_work`, `missing_sources`, and `available_sources`. They are bounded to 32,000 serialized characters. Task-associated mutations cannot escape the task board subtree. Browser progression, Pause, manual editing, Resume and finalization pass the full local acceptance script. PostgreSQL 16.15 verifies pause/write concurrency and retained checkpoints after database restart.
 
 ## Implementation entry points and persistence
 
@@ -129,4 +129,4 @@ Body reads use bounded chunks and a twenty-second transfer budget, with remainin
 
 ## Current acceptance gaps
 
-Rendered screenshots and MCP image transport pass real sandboxed Chromium tests locally. Full browser workflow acceptance, real-provider account workflows, PostgreSQL concurrency, and the current production container remain incomplete. See [PROGRESS.md](PROGRESS.md) for the evidence ledger. This reference describes implemented behavior, not a declaration that MCP v1 is complete.
+Rendered screenshots and image transport pass locally and inside the production-equivalent container using the explicitly approved opt-in `compose.chromium.yml`. Its engine-pinned seccomp profile adds only Playwright's namespace rule; non-root/no-new-privileges and other restrictions remain intact. Kernel process checks verify actual Chromium user/PID namespaces and additional seccomp filters. Rendering shares the app container, so all its processes receive those namespace syscall permissions; see `deploy/seccomp/README.md` for the security implications. Full browser acceptance, PostgreSQL 16.15/17.11 checks, nginx/MCP/WebSockets, restart and paired restoration also pass. Real-provider account/media workflows, realistic lecture acceptance, intended-host/SMTP checks and final audit remain incomplete. See [PROGRESS.md](PROGRESS.md); MCP v1 is not complete or deployed.

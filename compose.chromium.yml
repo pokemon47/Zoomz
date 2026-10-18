@@ -1,0 +1,6 @@
+# Optional: use with compose.production.yml only after reviewing deploy/seccomp/README.md.
+services:
+  app:
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:./deploy/seccomp/chromium.json

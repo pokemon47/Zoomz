@@ -1,5 +1,7 @@
 import importlib.util
+import hashlib
 import io
+import json
 import tarfile
 from pathlib import Path
 
@@ -10,6 +12,17 @@ from app.preflight import check_storage
 spec = importlib.util.spec_from_file_location("backup", Path(__file__).resolve().parents[2] / "deploy" / "backup.py")
 backup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(backup)
+
+
+def test_chromium_seccomp_only_adds_documented_namespace_permissions():
+    profile_path = Path(__file__).resolve().parents[2] / 'deploy/seccomp/chromium.json'
+    profile = json.loads(profile_path.read_text())
+    assert profile['syscalls'].pop(0) == {
+        'comment': 'Allow create user namespaces', 'names': ['clone', 'setns', 'unshare'],
+        'action': 'SCMP_ACT_ALLOW', 'args': [], 'includes': {}, 'excludes': {},
+    }
+    canonical = json.dumps(profile, sort_keys=True, separators=(',', ':')).encode()
+    assert hashlib.sha256(canonical).hexdigest() == '9da637d2ab0a204fcbd91bd88f1be9e004a3acab61c571a9f5b8870e588a17d2'
 
 
 def test_storage_is_writable_or_fails_clearly(tmp_path):

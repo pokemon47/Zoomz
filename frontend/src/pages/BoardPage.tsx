@@ -164,7 +164,7 @@ function LiveBoard({ store }: { store: SceneStore }) {
 
   return (
     <main className="zb-board-page">
-      {!store.local && user && store.spaceId ? <div style={{ position: "absolute", top: 144, right: 16, maxWidth: 380, maxHeight: "40vh", overflow: "auto", zIndex: 30000 }}><DraftStatus spaceId={store.spaceId} /></div> : null}
+      {!store.local && user && store.spaceId ? <div style={{ position: "absolute", top: 144, right: 16, maxWidth: 380, maxHeight: "40vh", overflow: "auto", zIndex: 30 }}><DraftStatus spaceId={store.spaceId} /></div> : null}
       <SpaceCanvas
         store={store}
         scenery={scenery}

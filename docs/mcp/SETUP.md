@@ -84,7 +84,7 @@ For other MCP clients, configure remote Streamable HTTP with OAuth resource disc
 | Claude account | Not tested; public endpoint/account access required |
 | ChatGPT Plus account | Not tested; current official documentation does not establish required write support |
 | Published ChatGPT plugin | Not implemented or submitted |
-| Browser UI | Partial actual Chromium verification; complete smoke script currently fails selecting Note. See HANDOFF.md. |
+| Browser UI | Expanded sandboxed Chromium workflow passes, including invited-editor collaboration, nested navigation, normal edits/undo, sources, grants, recovery and draft finalization. See HANDOFF.md. |
 | Realistic lecture visual/educational quality | Not verified |
 | Rendered board screenshot | Tested actual root/nested/close-up SpaceCanvas captures and SDK image transport in local sandboxed Chromium |
 
@@ -140,7 +140,7 @@ cd backend
 .venv/bin/python tests/mcp_browser_smoke.py --url http://127.0.0.1:5178
 ```
 
-The browser script uses a new synthetic account, real UI controls, normal authentication, and SDK calls. It is an acceptance check still under refinement; consult HANDOFF.md for its last observed result rather than assuming the complete workflow passes. It refuses non-loopback targets. It does not control a personal browser profile or prove Claude/ChatGPT compatibility.
+The browser script uses synthetic owner and invited-editor accounts, real UI controls, normal authentication, and SDK calls. The complete expanded workflow passes locally. It refuses non-loopback targets. It does not control a personal browser profile or prove Claude/ChatGPT compatibility. A transferred virtualenv may target a different Python installation; check imports before using it. The continuation used pinned dependencies in `/tmp/zoomz-mcp-v1-env` and `PLAYWRIGHT_BROWSERS_PATH=/tmp/zoomz-mcp-v1-browsers`, leaving the transferred virtualenv unchanged.
 
 To enable runtime screenshots, set `MCP_RENDER_PREVIEWS=1` and `MCP_RENDER_ORIGIN` to the app's exact origin or an explicit HTTP loopback origin. Production defaults to the same-image nginx origin `http://127.0.0.1:8080`. The Dockerfile installs only Chromium headless shell with its system dependencies, preserving user 10001 and existing restrictions. The operator Compose file exposes these optional settings; the Zenith manifest is unchanged. Verify sandboxed launch on the actual host before enabling. Some Linux hosts require user-namespace policy not available under their container restrictions. Do not disable the sandbox or add privileged capabilities as a workaround. See [Playwright's container guidance](https://playwright.dev/python/docs/docker).
 
@@ -148,7 +148,7 @@ Browsers receive read-only snapshot data by interception, not a public preview A
 
 ## Deploy with the existing application
 
-Optional PostgreSQL verification is **unverified locally**. The backend test fixture reads `TEST_DATABASE_URL` and otherwise forces disposable SQLite. Against an empty disposable PostgreSQL database only, run the following from backend after setting TEST_DATABASE_URL to its SQLAlchemy URL:
+PostgreSQL **16.15** migrations and the full **104-test** backend suite pass locally. PostgreSQL **17.11** production-container migrations/schema checks and **48 focused regressions** now pass as well; one renderer pytest case was not enabled and skipped. Apply migrations to a separate regression database before running its tests. The backend test fixture reads `TEST_DATABASE_URL` and otherwise forces disposable SQLite. Against an empty disposable PostgreSQL database only, run the following from backend after setting TEST_DATABASE_URL to its SQLAlchemy URL:
 
 ```sh
 DATABASE_URL="$TEST_DATABASE_URL" .venv/bin/alembic upgrade head
@@ -158,7 +158,17 @@ TEST_DATABASE_URL="$TEST_DATABASE_URL" .venv/bin/python -m pytest -q --tb=short
 
 Never use production: tests reset database content. Do not assume setting DATABASE_URL alone makes tests exercise PostgreSQL.
 
-Container commands are **unverified for this MCP revision**. Prepare an isolated operator configuration and storage targets using the root [README.md](../../README.md), not real production volumes, then run:
+For an actual database/application restart check, `tests/mcp_restart_smoke.py` has separate seed and verify phases. Use a migrated disposable loopback PostgreSQL database whose name starts with `zoomz_mcp_test`, `APP_ENV=development`, `PUBLIC_URL=http://testserver`, no SMTP, explicit temporary `STORAGE_DIR`, and `ZOOMZ_RESTART_TEST=1`. From backend, run:
+
+```sh
+.venv/bin/python -m tests.mcp_restart_smoke seed --state /tmp/zoomz-mcp-restart-state.json
+# Restart only the disposable PostgreSQL server before starting the verify process.
+.venv/bin/python -m tests.mcp_restart_smoke verify --state /tmp/zoomz-mcp-restart-state.json
+```
+
+Set `DATABASE_URL` to that disposable database for both commands. Each phase starts a fresh application process. The state file is created exclusively with mode 0600 and contains synthetic OAuth credentials; never commit or share it. Use a fresh state-file path for another seed. The check verifies existing-token acceptance, paused-write rejection, checkpoint/media retention, exact idempotent retry, preserved manual edits and finalization through a new connection. This passed after an actual PostgreSQL 16.15 restart. It does not exercise container/nginx or backup restoration.
+
+The existing production image builds with Node 24/Python 3.12 and starts healthy with PostgreSQL 17.11. nginx/MCP/WebSocket routing, non-root restrictions, restart persistence and paired database/media restore pass on Docker Desktop/WSL 2. **Sandboxed screenshots now pass with the approved opt-in seccomp override**. Default Compose still uses Docker's default policy and disables previews unless enabled. Prepare an isolated operator configuration and storage targets using the root [README.md](../../README.md), not real production volumes, then run:
 
 ```sh
 docker compose --env-file .env.production -p zoomz-mcp-test -f compose.production.yml config -q
@@ -174,9 +184,29 @@ Production requires HTTPS `PUBLIC_URL`, PostgreSQL migrations through `a90b4a770
 
 Existing paired database/media backups cover the new tables and originals. Verify a restore with MCP tasks, connections, and source files before admitting real data. Do not expose database/backend ports or weaken non-root container settings.
 
-The current Docker daemon did not respond during verification. The new container, PostgreSQL races, proxy streaming in production, actual Zenith SMTP, and backup recovery have not been accepted for this MCP change. No deployment has been performed.
+Docker Engine 29.8.2/Compose 5.6.0 are available on the continuation machine. The disposable `zoomz-mcp-v1-test` and `zoomz-mcp-v1-restore` projects use ignored `.audit/mcp-container.env` and `.audit/mcp-container-restore.env`. They share the same built image, with independent database/media volumes. Actual Zenith SMTP and public hosting remain unverified. No deployment has been performed.
 
-The existing guarded `deploy/container_check.py` now includes MCP discovery, unauthenticated rejection, actual SDK invocation, and persisted task/checkpoint/content/idempotency checks after restart and paired recovery. The existing CI workflow invokes it in disposable projects. Syntax checks passed, but Docker execution has not run for this change. Never set `ZOOMZ_CONTAINER_TEST=1` on a real instance to run this fixture.
+The existing guarded `deploy/container_check.py` includes production route/auth configuration checks, MCP discovery, unauthenticated rejection, actual SDK invocation, protected media/WebSockets and persisted task/checkpoint/content/idempotency checks after restart and paired recovery. The existing CI invokes its `seed` and `verify` modes; these modes now pass locally in Docker. Never set `ZOOMZ_CONTAINER_TEST=1` on a real instance.
+
+The separate `preview` mode requires an actual SpaceCanvas JPEG through authenticated MCP/nginx, checks dimensions/revision and decodes the image. With the retained disposable project running, reproduce it from the repository root:
+
+```sh
+docker compose --env-file .audit/mcp-container.env -p zoomz-mcp-v1-test -f compose.production.yml exec -T -e ZOOMZ_CONTAINER_TEST=1 app python - preview < deploy/container_check.py
+```
+
+The original default-policy attempt failed with generic 503/`No usable sandbox`. After explicit user approval, the tested optional override adds [Playwright's namespace operations](https://playwright.dev/python/docs/docker#crawling-and-scraping) `clone`, `setns`, `unshare` to the exact running Docker engine's default policy. Actual sandboxed screenshots pass; the focused container suite reports **50 passed, no skips** with renderer tests enabled.
+
+Read [the policy scope and provenance](../../deploy/seccomp/README.md) before opting in. Because rendering runs inside the main backend container, all app processes gain these three syscall permissions. The base production and Zenith configurations remain unchanged; the prepared override was used only on disposable infrastructure. No production deployment occurred. Keep both Compose files in subsequent start/recreate commands:
+
+```sh
+docker compose --env-file .audit/mcp-container.env -p zoomz-mcp-v1-test -f compose.production.yml -f compose.chromium.yml up -d --no-build --wait
+docker compose --env-file .audit/mcp-container.env -p zoomz-mcp-v1-test -f compose.production.yml -f compose.chromium.yml exec -T -e ZOOMZ_CONTAINER_TEST=1 app python - < deploy/chromium_check.py
+docker compose --env-file .audit/mcp-container.env -p zoomz-mcp-v1-test -f compose.production.yml -f compose.chromium.yml exec -T -e ZOOMZ_CONTAINER_TEST=1 app python - preview < deploy/container_check.py
+```
+
+The read-only sandbox checker confirms a real renderer's distinct user-namespace UID map, nested PID namespace, UID 10001, no-new-privileges, additional seccomp filters, zero effective capabilities, and no disabling flags in the actual browser command line. The profile regression fingerprints the complete original Docker policy, so unrelated syscall changes fail verification. Review the baseline on Docker upgrades. Do not disable Chromium's sandbox, run privileged, add capabilities, or disable seccomp to obtain a pass. If the intended host still denies namespaces, stop escalation and use a supported host or keep previews disabled pending a separately approved renderer design.
+
+The paired archive is `/tmp/zoomz-mcp-v1-container-backups/zoomz-backup-20261018T003838Z-4gy6dukk.tar`. Recovery into the initially empty second project passed; retrying restore into that populated project was refused, then its data verified intact. Preserve these disposable volumes/image for the sandbox follow-up; no second build is needed.
 
 ## Complete the acceptance exercise
 
